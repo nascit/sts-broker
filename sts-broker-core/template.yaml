@@ -1,0 +1,243 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: sts-broker-core
+
+Globals:
+  Function:
+    Timeout: 10
+
+Parameters:
+
+  RequestTableName:
+    Description: Name of the DynamoDB Table storing the requests for temporary credentials
+    Type: String
+    Default: permission_requests
+  RoleMappingTableName:
+    Description: Name of the DynamoDB Table storing the team/role mapping
+    Type: String
+    Default: role_mapping
+  TempCredentialsTableName:
+    Description: Name of the DynamoDB Table storing the temporary credentials
+    Type: String
+    Default: temp_credentials
+  AssumedRoleName:
+    Description: Name of the role to be assumed
+    Type: String
+    Default: TeamXRole
+  EmailID:
+    AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+    ConstraintDescription: This is not a valid email id.
+    Default: "timoteo.asn@gmail.com"
+    Description: Enter Approvers Email ID
+    MaxLength: '64'
+    MinLength: '1'
+    Type: String
+
+Resources:
+
+  StorePermissionRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: request_credentials/
+      Description: Store permissions requests on DynamoDB Table
+      Handler: app.lambdaHandler
+      Runtime: nodejs10.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          REQUESTS_TABLE: !Ref RequestTableName
+      Events:
+        API:
+          Type: Api
+          Properties:
+            Path: /credentials/request
+            Method: GET
+
+  EvaluatePermissionRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: evaluate_request/
+      Description: This function will listen to updates on permission request and either send "Approval URL" for security admin or notify user of approval status
+      Handler: app.lambdaHandler
+      Runtime: nodejs8.10
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          APPROVAL_SNS_TOPIC: !Ref ApprovalNotificationTopic #!GetAtt ApprovalNotificationTopic.TopicName
+          APPROVAL_URL: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/credentials/approve
+      Events:
+        DynamoDB:
+          Type: DynamoDB
+          Properties:
+            Stream:
+              'Fn::GetAtt':
+                - RequestCredentialsRecords
+                - StreamArn
+            StartingPosition: TRIM_HORIZON
+            BatchSize: 5
+
+  ApproveRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: approve/
+      Description: This function will actually assume the role and store the temporary credentials.
+      Handler: app.lambdaHandler
+      Runtime: nodejs10.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          ASSUMED_ROLE: !GetAtt AssumedRole.Arn
+          ROLE_MAPPING_TABLE: !Ref RoleMappingTableName
+          REQUESTS_TABLE: !Ref RequestTableName
+          TEMP_CREDENTIALS_TABLE: !Ref TempCredentialsTableName
+      Events:
+        API:
+          Type: Api
+          Properties:
+            Path: /credentials/approve
+            Method: GET
+            RequestParameters:
+              - method.request.querystring.requestid
+#              - method.request.querystring.token
+
+  RetrieveCredentialsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: retrieve_credentials/
+      Description: This function will retrieve the credentials from DynamoDB table and return to the end user.
+      Handler: app.lambdaHandler
+      Runtime: nodejs10.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TEMP_CREDENTIALS_TABLE: !Ref TempCredentialsTableName
+      Events:
+        API:
+          Type: Api
+          Properties:
+            Path: /credentials/get
+            Method: GET
+            RequestParameters:
+              - method.request.querystring.userid
+
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - !Ref STSAssumeManagedPolicy
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+
+  STSAssumeManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: AllowAssumeRole
+            Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Resource: "*" #!GetAtt AssumedRole.Arn # Resource field should contain every possible role that can be assumed.
+
+  # For simplicity, the role to be assumed is created within the stack,
+  # but in real world this role should already be created and mapped on RoleMappingTableName
+  AssumedRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !GetAtt LambdaExecutionRole.Arn
+            Action:
+              - 'sts:AssumeRole'
+      RoleName: !Ref AssumedRoleName
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+  RequestCredentialsRecords:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      ProvisionedThroughput:
+        WriteCapacityUnits: 1
+        ReadCapacityUnits: 1
+      TableName: !Ref RequestTableName
+      AttributeDefinitions:
+        - AttributeName: requestid
+          AttributeType: S
+        - AttributeName: userid
+          AttributeType: S
+      KeySchema:
+        - KeyType: HASH
+          AttributeName: requestid
+        - KeyType: RANGE
+          AttributeName: userid
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  RoleMappingTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      ProvisionedThroughput:
+        WriteCapacityUnits: 1
+        ReadCapacityUnits: 1
+      TableName: !Ref RoleMappingTableName
+      AttributeDefinitions:
+        - AttributeName: teamid
+          AttributeType: S
+      KeySchema:
+        - KeyType: HASH
+          AttributeName: teamid
+
+  TemporaryCredentialsTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      ProvisionedThroughput:
+        WriteCapacityUnits: 1
+        ReadCapacityUnits: 1
+      TableName: !Ref TempCredentialsTableName
+      AttributeDefinitions:
+        - AttributeName: userid
+          AttributeType: S
+      SSESpecification:
+        SSEEnabled: true
+      KeySchema:
+        - KeyType: HASH
+          AttributeName: userid
+      TimeToLiveSpecification:
+        Enabled: true
+        AttributeName: 'expiration'
+
+  ApprovalNotificationTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      Subscription:
+        -
+          Endpoint: !Ref EmailID
+          Protocol: email
+      TopicName: "ApprovalNotificationTopic"
+
+Outputs:
+  AssumedRoleARN:
+    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
+    Value: !GetAtt AssumedRole.Arn
+  ApprovalNotificationTopicName:
+    Description: "Name of the Approval topic"
+    Value: !GetAtt ApprovalNotificationTopic.TopicName
+  STSBrokerApi:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cognito User Pools Auth
+Outputs:
+  CognitoUserPoolClientId:
+    Description: Cognito User Pool Client Id
+    Value:
+      Ref: MyCognitoUserPoolClient
+  CognitoUserPoolId:
+    Description: Cognito User Pool Id
+    Value:
+      Ref: MyCognitoUserPool
+Parameters:
+  CognitoUserPoolClientName:
+    Default: MyUserPoolClient
+    Type: String
+  CognitoUserPoolName:
+    Default: MyUserPool
+    Type: String
+Resources:
+  LambdaCognitoUserPoolExecutionPermission:
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - PreSignupLambdaFunction
+        - Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${MyCognitoUserPool}
+    Type: AWS::Lambda::Permission
+  MyCognitoUserPool:
+    Properties:
+      LambdaConfig:
+        PreSignUp:
+          Fn::GetAtt:
+          - PreSignupLambdaFunction
+          - Arn
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+      Schema:
+      - AttributeDataType: String
+        Name: email
+        Required: false
+      UserPoolName:
+        Ref: CognitoUserPoolName
+      UsernameAttributes:
+      - email
+    Type: AWS::Cognito::UserPool
+  MyCognitoUserPoolClient:
+    Properties:
+      ClientName:
+        Ref: CognitoUserPoolClientName
+      GenerateSecret: false
+      UserPoolId:
+        Ref: MyCognitoUserPool
+    Type: AWS::Cognito::UserPoolClient
+  PreSignupLambdaFunction:
+    Properties:
+      CodeUri: PreSignupLambdaFunction
+      Handler: index.handler
+      InlineCode: "exports.handler = async (event, context, callback) => {\n  event.response\
+        \ = { autoConfirmUser: true }\n  return event\n}\n"
+      MemorySize: 128
+      Runtime: nodejs8.10
+      Timeout: 3
+    Type: AWS::Serverless::Function
+Transform: AWS::Serverless-2016-10-31

@@ -1,0 +1,47 @@
+#!/bin/bash
+
+_print_help() {
+  cat <<HEREDOC
+Export Credentials
+Usage:
+  ${_ME} [<arguments>]
+  ${_ME} -h | --help
+Options:
+  -h --help  Show this screen.
+HEREDOC
+}
+
+_export(){
+    echo "Making request to STS broker..."
+    url=$1'credentials/get?userid='$2
+    echo $url
+    json=`curl -s $url`
+
+    if [ -z "$json" ]
+    then
+          echo "There are no current temporary variables available for user \"$2\""
+    fi
+
+    echo "$json"
+    export AWS_ACCESS_KEY_ID=$(echo "$json" | jq -r '.credentials.AccessKeyId')
+    export AWS_SECRET_ACCESS_KEY=$(echo "$json" | jq -r '.credentials.SecretAccessKey')
+    export AWS_SESSION_TOKEN=$(echo "$json" | jq -r '.credentials.SessionToken')
+}
+
+
+_main() {
+    if [ -n "$1" ]              # Tested variable is quoted.
+    then
+     echo "Parameter #1 is $1"  # Need quotes to escape #
+    fi
+
+    if [[ "${1:-}" =~ ^-h|--help$ ]]
+    then
+    _print_help
+    else
+    _export $1 $2
+    fi
+}
+
+# Call `_main` after everything has been defined.
+_main "$@"

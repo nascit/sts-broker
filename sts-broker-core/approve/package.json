@@ -1,0 +1,17 @@
+{
+  "name": "sts-broker",
+  "version": "0.0.1",
+  "description": "",
+  "author": "SAM CLI",
+  "license": "MIT",
+  "dependencies": {
+    "uuid": "^2.0.3"
+  },
+  "scripts": {
+    "test": "mocha tests/unit/"
+  },
+  "devDependencies": {
+    "chai": "^4.2.0",
+    "mocha": "^6.1.4"
+  }
+}

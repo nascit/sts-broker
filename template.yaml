@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: STS Broker
+
+Resources:
+
+  AuthApp:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: authentication/template.yaml
+      Parameters:
+        CognitoUserPoolName: STSBrokerUserPool
+        CognitoUserPoolClientName: STSBrokerUserPoolClient
+
+  STSBrokerCore:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: sts-broker-core/template.yaml
+#      Parameters:
+#        CognitoUserPoolARN: !GetAtt AuthApp.Outputs.CognitoUserPoolARN
+#        CognitoUserPoolClientID: !GetAtt AuthApp.Outputs.CognitoUserPoolClientId
+
+Outputs:
+  STSBrokerApi:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !GetAtt STSBrokerCore.Outputs.STSBrokerApi
