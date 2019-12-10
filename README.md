@@ -11,9 +11,10 @@ This project can be used as a reference for a serverless Identity Broker archite
     - Implement a strong identity foundation
 
 
+
 ## Architecture
 
-![Alt text](STSBrokerArchitecture.png?raw=true "STS Broker architecture")
+![STS Broker Architecture](STSBrokerArchitecture.png?raw=true "STS Broker architecture")
 
 1. Federated user invokes STS broker requesting specific permissions (passing JWT token)
 2. Invoked Lambda stores the permission request on a DynamoDB table (Permissions Request Table)
@@ -34,13 +35,15 @@ This project can be used as a reference for a serverless Identity Broker archite
 7. User is notified about the approval status by subscribing to an SNS topic (Lambda checks for "Approval" field/attribute).
 8. User invokes STS broker API to retrieve the temporary credentials
 
+
+
 ## Deploy the sample application
 
 
 To prepare the application for deployment, use the `sam package` command.
 
 ```bash
-$ sam package --output-template-file packaged.yaml --s3-bucket BUCKET_NAME --region AWS_REGION
+$ sam package --output-template-file packaged.yaml --s3-bucket BUCKET_NAME --region AWS_REGION --profile <PROFILE>
 ```
 
 The SAM CLI creates deployment packages, uploads them to the S3 bucket, and creates a new version of the template that refers to the artifacts in the bucket. 
@@ -48,8 +51,9 @@ The SAM CLI creates deployment packages, uploads them to the S3 bucket, and crea
 To deploy the application, use the `sam deploy` command.
 
 ```bash
-$ sam deploy --template-file packaged.yaml --stack-name sts-broker --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --region AWS_REGION
+$ sam deploy --template-file packaged.yaml --stack-name sts-broker --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --region AWS_REGION --profile <PROFILE>
 ```
+
 
 
 ## Invoke STS Broker
@@ -71,6 +75,7 @@ Once permissions are approved by security admin, we can retrieve it:
 ```bash
 $ curl $api_url'/credentials/get?userid=<USER_ID>'
 ```
+
 
 ## Resources
 
