@@ -52,6 +52,8 @@ Resources:
           Properties:
             Path: /credentials/request
             Method: GET
+            RequestParameters:
+              - method.request.querystring.policy
 
   EvaluatePermissionRequestFunction:
     Type: AWS::Serverless::Function
@@ -168,6 +170,7 @@ Resources:
       RoleName: !Ref AssumedRoleName
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
 
   RequestCredentialsRecords:
     Type: 'AWS::DynamoDB::Table'

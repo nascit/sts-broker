@@ -12,19 +12,47 @@ exports.lambdaHandler = async (event) => {
     // event should contain permission requestid, token (to validate approval request)
 
     // TODO: STEP 1 - Get role association based on user info from 'role_mapping' table
+    // TODO: STEP 2 - Map the policy from the requests table to be passed on the assumeRole API call
 
-    // STEP 2 - ASSUME ROLE
+    var params = {
+        TableName: process.env.REQUESTS_TABLE,
+        Key: {
+            requestid: event.queryStringParameters.requestid,
+            userid: "xyz"
+        }
+    };
+
+    var permission_request = await docClient.get(params).promise();
+
+    var statements = []
+    permission_request.Item.permissions_requested.forEach(function(value){
+      var statement = {
+        "Effect": "Allow",
+        "Action": value.Action,
+        "Resource": value.Resource
+      }
+      statements.push(statement)
+    });
+
+    const policy = {
+      "Version": "2012-10-17",
+      "Statement": statements
+    };
+
+    console.log(JSON.stringify(policy));
+
+    // STEP 3 - ASSUME ROLE
     var params = {
         DurationSeconds: 3600,
-        Policy: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"Stmt1\",\"Effect\":\"Allow\",\"Action\":\"s3:ListAllMyBuckets\",\"Resource\":\"*\"}]}",
+        Policy: JSON.stringify(policy), //"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"Stmt1\",\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"*\"}]}",
         RoleArn: process.env.ASSUMED_ROLE,
-        RoleSessionName: "MySession"
+        RoleSessionName: "FederatedSession"
     };
     const creds = await sts.assumeRole(params).promise();
 
     console.log(creds.Credentials);
 
-    // STEP 3 - Stores temporary credentials on TEMP_CREDENTIALS_TABLE table
+    // STEP 4 - Stores temporary credentials on TEMP_CREDENTIALS_TABLE table
 
     var params = {
         TableName : process.env.TEMP_CREDENTIALS_TABLE,
@@ -37,7 +65,7 @@ exports.lambdaHandler = async (event) => {
 
     const result = await docClient.put(params).promise();
 
-    // STEP 4 - Update Permission request table to reflect the approval event
+    // STEP 5 - Update Permission request table to reflect the approval event
 
     const timestamp = new Date().getTime();
 
