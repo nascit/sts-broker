@@ -7,27 +7,26 @@ const uuid = require('uuid');
 const dynamodb = require('aws-sdk/clients/dynamodb');
 const docClient = new dynamodb.DocumentClient();
 
-exports.lambdaHandler = async (event) => {
-    console.info('received:', event);
+exports.lambdaHandler = async (event, context, callback) => {
+//    console.info('received:', event);
 
-    console.log(event.queryStringParameters.policy);
+    if (!event.requestContext.authorizer) {
+        errorResponse('Authorization not configured.', context.awsRequestId, callback);
+        return;
+    }
 
-    var policy = JSON.parse(event.queryStringParameters.policy);
+    let body = JSON.parse(event.body);
 
-    console.log(policy);
+//    console.log(event.body);
+//
+//    console.log(event.requestContext.authorizer);
+
+    var policy = JSON.parse(event.body);
 
     var userid = "xyz";
     var permissions_requested = policy.Statement;
-//    var permissions_requested = [
-//      {
-//        Action: "s3:GetObject",
-//        Resource: "arn:aws:s3:::sts-broker-test-access/*"
-//      },
-//      {
-//        Action: "sqs:*",
-//        Resource: "*"
-//      }
-//    ];
+
+    console.log(permissions_requested);
 
     var params = {
         TableName: process.env.REQUESTS_TABLE,
@@ -52,3 +51,16 @@ exports.lambdaHandler = async (event) => {
     console.info(`response from: ${event.path} statusCode: ${response.statusCode} body: ${response.body}`);
     return response;
 };
+
+function errorResponse(errorMessage, awsRequestId, callback) {
+  callback(null, {
+    statusCode: 500,
+    body: JSON.stringify({
+      Error: errorMessage,
+      Reference: awsRequestId,
+    }),
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
+  });
+}

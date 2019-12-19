@@ -32,8 +32,32 @@ Parameters:
     MaxLength: '64'
     MinLength: '1'
     Type: String
+  CognitoUserPoolARN:
+    Description: ARN of the Cognito User Pool
+    Type: String
+    Default: MyUserPool
+  CognitoUserPoolClientID:
+    Description: Cognito User Pool Client ID
+    Type: String
+    Default: MyUserPoolClient
+  Stage:
+    Description: Stage name (Dev, Prod)
+    Type: String
+    Default: Dev
 
 Resources:
+
+  STSBrokerAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Ref CognitoUserPoolARN
+
 
   StorePermissionRequestFunction:
     Type: AWS::Serverless::Function
@@ -50,10 +74,11 @@ Resources:
         API:
           Type: Api
           Properties:
+            RestApiId: !Ref STSBrokerAPI
             Path: /credentials/request
-            Method: GET
-            RequestParameters:
-              - method.request.querystring.policy
+            Method: POST
+#            RequestParameters:
+#              - method.request.querystring.policy
 
   EvaluatePermissionRequestFunction:
     Type: AWS::Serverless::Function
@@ -66,7 +91,7 @@ Resources:
       Environment:
         Variables:
           APPROVAL_SNS_TOPIC: !Ref ApprovalNotificationTopic #!GetAtt ApprovalNotificationTopic.TopicName
-          APPROVAL_URL: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/credentials/approve
+          APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/Prod/credentials/approve
       Events:
         DynamoDB:
           Type: DynamoDB
@@ -96,6 +121,7 @@ Resources:
         API:
           Type: Api
           Properties:
+            RestApiId: !Ref STSBrokerAPI
             Path: /credentials/approve
             Method: GET
             RequestParameters:
@@ -117,6 +143,7 @@ Resources:
         API:
           Type: Api
           Properties:
+            RestApiId: !Ref STSBrokerAPI
             Path: /credentials/get
             Method: GET
             RequestParameters:
@@ -236,11 +263,11 @@ Resources:
 
 Outputs:
   AssumedRoleARN:
-    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
+    Description: "Default assumed Role ARN"
     Value: !GetAtt AssumedRole.Arn
   ApprovalNotificationTopicName:
-    Description: "Name of the Approval topic"
+    Description: "Name of the approval SNS topic"
     Value: !GetAtt ApprovalNotificationTopic.TopicName
-  STSBrokerApi:
-    Description: "API Gateway endpoint URL for Prod stage"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  STSBrokerAPI:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"

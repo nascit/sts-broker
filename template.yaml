@@ -16,11 +16,11 @@ Resources:
     Type: AWS::Serverless::Application
     Properties:
       Location: sts-broker-core/template.yaml
-#      Parameters:
-#        CognitoUserPoolARN: !GetAtt AuthApp.Outputs.CognitoUserPoolARN
-#        CognitoUserPoolClientID: !GetAtt AuthApp.Outputs.CognitoUserPoolClientId
+      Parameters:
+        CognitoUserPoolARN: !GetAtt AuthApp.Outputs.CognitoUserPoolARN
+        CognitoUserPoolClientID: !GetAtt AuthApp.Outputs.CognitoUserPoolClientId
 
 Outputs:
-  STSBrokerApi:
+  STSBrokerAPI:
     Description: "API Gateway endpoint URL for Prod stage"
-    Value: !GetAtt STSBrokerCore.Outputs.STSBrokerApi
+    Value: !GetAtt STSBrokerCore.Outputs.STSBrokerAPI

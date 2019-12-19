@@ -61,13 +61,19 @@ $ sam deploy --template-file packaged.yaml --stack-name sts-broker --capabilitie
 We first need to get the API URL created:
 
 ```bash
-$ export api_url=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='STSBrokerApi'].OutputValue" --output text)
+$ export api_url=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='STSBrokerAPI'].OutputValue" --output text --profile <PROFILE>)
 ```
 
-Now we can call the request permission API with:
+We can write the policy request to a local file:
 
 ```bash
-$ curl $api_url'credentials/request'
+$ echo '{ "Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"*"}] }' > policy.json
+```
+
+Now we can call the request permission API using 'cognitocurl' CLI tool:
+
+```bash
+$ cognitocurl --cognitoclient 7235u1o7nnrhehpblrlel7vb0l --userpool us-east-1_1WHyx0A3D --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @policy.json"
 ```
 
 Once permissions are approved by security admin, we can retrieve it:
