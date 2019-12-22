@@ -65,7 +65,7 @@ Resources:
       CodeUri: request_credentials/
       Description: Store permissions requests on DynamoDB Table
       Handler: app.lambdaHandler
-      Runtime: nodejs10.x
+      Runtime: nodejs12.x
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
@@ -77,8 +77,6 @@ Resources:
             RestApiId: !Ref STSBrokerAPI
             Path: /credentials/request
             Method: POST
-#            RequestParameters:
-#              - method.request.querystring.policy
 
   EvaluatePermissionRequestFunction:
     Type: AWS::Serverless::Function
@@ -86,12 +84,12 @@ Resources:
       CodeUri: evaluate_request/
       Description: This function will listen to updates on permission request and either send "Approval URL" for security admin or notify user of approval status
       Handler: app.lambdaHandler
-      Runtime: nodejs8.10
+      Runtime: nodejs12.x
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
           APPROVAL_SNS_TOPIC: !Ref ApprovalNotificationTopic #!GetAtt ApprovalNotificationTopic.TopicName
-          APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/Prod/credentials/approve
+          APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
       Events:
         DynamoDB:
           Type: DynamoDB
@@ -109,7 +107,7 @@ Resources:
       CodeUri: approve/
       Description: This function will actually assume the role and store the temporary credentials.
       Handler: app.lambdaHandler
-      Runtime: nodejs10.x
+      Runtime: nodejs12.x
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
@@ -124,6 +122,8 @@ Resources:
             RestApiId: !Ref STSBrokerAPI
             Path: /credentials/approve
             Method: GET
+            Auth:
+              Authorizer: NONE
             RequestParameters:
               - method.request.querystring.requestid
 #              - method.request.querystring.token
@@ -134,7 +134,7 @@ Resources:
       CodeUri: retrieve_credentials/
       Description: This function will retrieve the credentials from DynamoDB table and return to the end user.
       Handler: app.lambdaHandler
-      Runtime: nodejs10.x
+      Runtime: nodejs12.x
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:

@@ -1,9 +1,7 @@
 'use strict';
 
-//const aws = require('aws-sdk');
 const uuid = require('uuid');
 
-// Create a DocumentClient that represents the query to add an item
 const dynamodb = require('aws-sdk/clients/dynamodb');
 const docClient = new dynamodb.DocumentClient();
 
@@ -15,15 +13,11 @@ exports.lambdaHandler = async (event, context, callback) => {
         return;
     }
 
-    let body = JSON.parse(event.body);
-
-//    console.log(event.body);
-//
-//    console.log(event.requestContext.authorizer);
+//    console.log(event.requestContext.authorizer.claims);
 
     var policy = JSON.parse(event.body);
 
-    var userid = "xyz";
+    var userid = event.requestContext.authorizer.claims.sub;
     var permissions_requested = policy.Statement;
 
     console.log(permissions_requested);
@@ -33,9 +27,8 @@ exports.lambdaHandler = async (event, context, callback) => {
         Item: {
             requestid: uuid.v1(),
             userid: userid,
-            email: "xyz@mycompany.com",  //Retrieve user info from JWT token
-            squad: "XXX",
-            chapter: "YYY",
+            email: event.requestContext.authorizer.claims.email,  // Retrieve user info from JWT token
+            team: event.requestContext.authorizer.claims['custom:team'],
             permissions_requested: permissions_requested,
             timestamp: new Date().getTime()
         },
@@ -48,7 +41,6 @@ exports.lambdaHandler = async (event, context, callback) => {
         body: "Permission request made by user '" + userid + "'. Please allow some time until the security admin evaluates it.\n"
     };
 
-    console.info(`response from: ${event.path} statusCode: ${response.statusCode} body: ${response.body}`);
     return response;
 };
 

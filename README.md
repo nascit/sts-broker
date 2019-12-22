@@ -64,6 +64,13 @@ We first need to get the API URL created:
 $ export api_url=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='STSBrokerAPI'].OutputValue" --output text --profile <PROFILE>)
 ```
 
+And the Cognito UserPool ID/ Client App ID:
+
+```bash
+$ export user_pool_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolID'].OutputValue" --output text --profile <PROFILE>)
+$ export user_pool_client_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientID'].OutputValue" --output text --profile <PROFILE>)
+```
+
 We can write the policy request to a local file:
 
 ```bash
@@ -73,13 +80,13 @@ $ echo '{ "Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","A
 Now we can call the request permission API using 'cognitocurl' CLI tool:
 
 ```bash
-$ cognitocurl --cognitoclient 7235u1o7nnrhehpblrlel7vb0l --userpool us-east-1_1WHyx0A3D --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @policy.json"
+$ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USER_POOL> --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @policy.json"
 ```
 
 Once permissions are approved by security admin, we can retrieve it:
 
 ```bash
-$ curl $api_url'/credentials/get?userid=<USER_ID>'
+$ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USER_POOL> --run "curl -X GET $api_url'credentials/get'"
 ```
 
 

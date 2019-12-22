@@ -13,20 +13,19 @@ HEREDOC
 
 _export(){
     echo "Making request to STS broker..."
-    url=$1'credentials/get?userid='$2
-    json=`curl -s $url`
+
+    json=`cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --run "curl -X GET $api_url'credentials/get'"`
 
     if [ -z "$json" ]
     then
           echo "There are no current temporary variables available for user \"$2\""
     fi
 
-    echo "$json"
+#    echo "$json"
     export AWS_ACCESS_KEY_ID=$(echo "$json" | jq -r '.credentials.AccessKeyId')
     export AWS_SECRET_ACCESS_KEY=$(echo "$json" | jq -r '.credentials.SecretAccessKey')
     export AWS_SESSION_TOKEN=$(echo "$json" | jq -r '.credentials.SessionToken')
 }
-
 
 _main() {
     if [[ "${1:-}" =~ ^-h|--help$ ]]

@@ -18,9 +18,15 @@ Resources:
       Location: sts-broker-core/template.yaml
       Parameters:
         CognitoUserPoolARN: !GetAtt AuthApp.Outputs.CognitoUserPoolARN
-        CognitoUserPoolClientID: !GetAtt AuthApp.Outputs.CognitoUserPoolClientId
+        CognitoUserPoolClientID: !GetAtt AuthApp.Outputs.CognitoUserPoolClientID
 
 Outputs:
   STSBrokerAPI:
-    Description: "API Gateway endpoint URL for Prod stage"
+    Description: "API Gateway endpoint URL for stage"
     Value: !GetAtt STSBrokerCore.Outputs.STSBrokerAPI
+  CognitoUserPoolID:
+    Description: "Cognito User Pool ID"
+    Value: !GetAtt AuthApp.Outputs.CognitoUserPoolID
+  CognitoUserPoolClientID:
+    Description: "Cognito User Pool Client ID"
+    Value: !GetAtt AuthApp.Outputs.CognitoUserPoolClientID

@@ -17,10 +17,6 @@ function get_permissions (permissions_requested) {
     return permissions + "\n";
 }
 
-//for (var statement record.dynamodb.NewImage.permissions_requested) {
-//
-//                    }
-
 module.exports.lambdaHandler = (event, context, callback) => {
 
     event.Records.forEach((record) => {
@@ -30,13 +26,11 @@ module.exports.lambdaHandler = (event, context, callback) => {
             var request = dynamodbTranslator.translateOutput(record.dynamodb.NewImage, ItemShape);
             console.log('DynamoDB Record: %j', request);
             if (request.approved) {
-                console.log("Permission request was approved");
-                // TODO: Notify user the permission was approved.
+                console.log("Permission request is already approved");
+                // TODO: Notify user the permission is already approved.
             } else {
                 console.log("Permission request still not approved.");
                 console.log("Sending request to " + process.env.APPROVAL_SNS_TOPIC);
-                // TODO: Generate Approval URL and send to SNS topic.
-                // Create publish parameters
 
                 var params = {
                     Subject:'Permissions request for approval',
@@ -44,8 +38,8 @@ module.exports.lambdaHandler = (event, context, callback) => {
                         'An user has requested permissions to: \n\n' +
                         get_permissions(request.permissions_requested) +
                         'End-user e-mail : ' + JSON.stringify(request.email) +
-                        '\nPlease, approve by clicking the below URL.\n\n'+
-                        process.env.APPROVAL_URL + '?requestid=' +  request.requestid +
+                        '\n\nPlease, approve by clicking the below URL.\n\n'+
+                        process.env.APPROVAL_URL + '?requestid=' +  request.requestid + '&userid=' +  request.userid +
                         '\n\nPlease ignore if you dont want to grant permissions to this user.\n' +
                         'Thanks,\n' +
                         'Approval Team\n',
@@ -75,20 +69,3 @@ module.exports.lambdaHandler = (event, context, callback) => {
 
     return response;
 };
-
-
-//    try {
-//        var params = {
-//            DurationSeconds: 3600,
-//            Policy: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"Stmt1\",\"Effect\":\"Allow\",\"Action\":\"s3:ListAllMyBuckets\",\"Resource\":\"*\"}]}",
-//            RoleArn: process.env.ASSUMED_ROLE,
-//            RoleSessionName: "MySession"
-//        };
-//        sts.assumeRole(params, function (err, data) {
-//            if (err) console.log(err, err.stack);
-//            else     console.log(data);
-//        });
-//    } catch (err) {
-//        console.log(err);
-//        return err;
-//    }
