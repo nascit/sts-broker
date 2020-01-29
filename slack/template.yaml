@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Notify admin via Slack channel
+
+Parameters:
+  ApprovalNotificationTopicARN:
+    Description: ARN of the approval SNS topic
+    Type: String
+  SlackUrl:
+    Description: Webhook URL for integration with Slack
+    Type: String
+    Default: "https://hooks.slack.com/services/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"
+
+Globals:
+  Function:
+    Timeout: 10
+
+Resources:
+  LambdaToSlack:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.handler
+      Description: This function will send the approval URL to a slack channel.
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          SLACK_WEBHOOK_URL: !Ref SlackUrl
+      Events:
+        NotificationTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref ApprovalNotificationTopicARN
+            FilterPolicy:
+              channel:
+                - slack
