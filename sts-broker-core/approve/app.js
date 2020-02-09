@@ -10,9 +10,7 @@ exports.lambdaHandler = async (event) => {
 
     // TODO: event should contain permission requestid, token (to validate approval request)
 
-    // TODO: STEP 1 - Get role association based on user info from 'role_mapping' table
-
-    // STEP 2 - Map the policy from the requests table to be passed on the assumeRole API call
+    // STEP 1 - Map the policy from the requests table to be passed on the assumeRole API call
 
     var params = {
         TableName: process.env.REQUESTS_TABLE,
@@ -41,12 +39,27 @@ exports.lambdaHandler = async (event) => {
 
     console.log(JSON.stringify(policy));
 
+    // TODO: STEP 2 - Get role association based on user info from 'team_preferences' table
+
+    var team = permission_request.Item.team;
+
+    var params = {
+        TableName: process.env.TEAM_PREFERENCES_TABLE,
+        Key: {
+            teamid: team
+        }
+    };
+
+    var team_info = await docClient.get(params).promise();
+
+    var role_assumed = team_info.Item.role;
+
     // STEP 3 - ASSUME ROLE
 
     var params = {
         DurationSeconds: 3600, // TODO: session duration can also be a parameter
         Policy: JSON.stringify(policy),
-        RoleArn: process.env.ASSUMED_ROLE,
+        RoleArn: role_assumed,
         RoleSessionName: event.queryStringParameters.userid
     };
     const creds = await sts.assumeRole(params).promise();

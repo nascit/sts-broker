@@ -41,8 +41,8 @@ Outputs:
     CognitoUserPoolARN:
       Value: !GetAtt MyCognitoUserPool.Arn
     CognitoUserPoolID:
-      Description: "Cognito User Pool ID"
+      Description: Cognito User Pool ID
       Value: !Ref MyCognitoUserPool
     CognitoUserPoolClientID:
-      Description: "Cognito User Pool Client ID"
+      Description: Cognito User Pool Client ID
       Value: !Ref MyCognitoUserPoolClient

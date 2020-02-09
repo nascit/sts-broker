@@ -17,23 +17,53 @@ function get_permissions (permissions_requested) {
     return permissions + "\n";
 }
 
-module.exports.lambdaHandler = (event, context, callback) => {
+async function asyncForEach(array, callback) {
+  for (let index = 0; index < array.length; index++) {
+    await callback(array[index], index, array);
+  }
+}
 
-    event.Records.forEach((record) => {
-        console.log(record);
+exports.lambdaHandler = async (event, context, callback) => {
+
+    await asyncForEach(event.Records, async (record) => {
         if (record.eventName == "INSERT") {
 
             var request = dynamodbTranslator.translateOutput(record.dynamodb.NewImage, ItemShape);
-            console.log('DynamoDB Record: %j', request);
+            console.log('Permission request: %j', request);
             if (request.approved) {
                 console.log("Permission request is already approved");
                 // TODO: Notify user the permission is already approved.
             } else {
                 console.log("Permission request still not approved.");
-                console.log("Sending request to " + process.env.APPROVAL_SNS_TOPIC);
+
+                // TODO: Evaluate if permission request needs manual approval. If not, automatically approve request.
+                console.log("Manual approval needed. Sending request to " + process.env.APPROVAL_SNS_TOPIC);
+
+                // Get user preferred channel
+
+                var team = request.team;
+
+                var params = {
+                    TableName: process.env.TEAM_PREFERENCES_TABLE,
+                    Key: {
+                        teamid: team
+                    }
+                };
+
+                var team_info = await docClient.get(params).promise();
+
+                var preferred_channel = team_info.Item.preferred_channel;
+
+                // Send SNS message
 
                 var params = {
                     Subject:'Permissions request for approval',
+                    MessageAttributes: {
+                        channel: {
+                            DataType: 'String',
+                            StringValue: preferred_channel
+                        },
+                    },
                     Message:'Hello Admin, \n\n' +
                         'An user has requested permissions to: \n\n' +
                         get_permissions(request.permissions_requested) +
@@ -46,26 +76,12 @@ module.exports.lambdaHandler = (event, context, callback) => {
                     TopicArn: process.env.APPROVAL_SNS_TOPIC
                 };
 
-                sns.publish(params, function (err, data) {
-                    if(err) {
-                        console.error('Error publishing to SNS');
-                        console.log(err);
-                    } else {
-                        console.info('Message published to SNS');
-                    }
-                });
+                let published = await sns.publish(params).promise();
+
             }
 
-        };
+        }
 
     });
 
-    const response = {
-        'statusCode': 200,
-        'body': JSON.stringify({
-            message: 'hello world',
-        })
-    };
-
-    return response;
 };

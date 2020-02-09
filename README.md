@@ -2,14 +2,13 @@
 
 This project can be used as a reference for a serverless Identity Broker architecture.
 
-- Why would you need a Identity Broker?
+- Why would you need a Identity Token Broker?
     - Limit of how many IAM roles/users an AWS account can have.
     - Make it easier to manage permissions used among IAM roles/users.
     - Allow to register every permission request made (traceability).
     - Least privilege access: Avoid sharing same permissions among federated users.
     - Dynamic permissions
     - Implement a strong identity foundation
-
 
 
 ## Architecture

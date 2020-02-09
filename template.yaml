@@ -2,6 +2,17 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: STS Broker
 
+Parameters:
+
+  EnvType:
+    Type: String
+    Description: The type of environment to create.
+    Default: prod
+    AllowedValues:
+      - dev
+      - prod
+    ConstraintDescription: must specify prod or dev.
+
 Resources:
 
   AuthApp:
@@ -19,14 +30,22 @@ Resources:
       Parameters:
         CognitoUserPoolARN: !GetAtt AuthApp.Outputs.CognitoUserPoolARN
         CognitoUserPoolClientID: !GetAtt AuthApp.Outputs.CognitoUserPoolClientID
+        EnvType: !Ref EnvType
+
+  NotifySlack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: slack/template.yaml
+      Parameters:
+        ApprovalNotificationTopicARN: !GetAtt STSBrokerCore.Outputs.ApprovalNotificationTopicARN
 
 Outputs:
   STSBrokerAPI:
-    Description: "API Gateway endpoint URL for stage"
+    Description: API Gateway endpoint URL for stage
     Value: !GetAtt STSBrokerCore.Outputs.STSBrokerAPI
   CognitoUserPoolID:
-    Description: "Cognito User Pool ID"
+    Description: Cognito User Pool ID
     Value: !GetAtt AuthApp.Outputs.CognitoUserPoolID
   CognitoUserPoolClientID:
-    Description: "Cognito User Pool Client ID"
+    Description: Cognito User Pool Client ID
     Value: !GetAtt AuthApp.Outputs.CognitoUserPoolClientID

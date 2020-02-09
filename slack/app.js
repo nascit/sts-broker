@@ -3,6 +3,7 @@
 const { IncomingWebhook } = require('@slack/webhook');
 
 // Read a url from the environment variables
+// TODO: Get slack URL from TEAM_PREFERENCES_TABLE DynamoDB table
 const url = process.env.SLACK_WEBHOOK_URL;
 
 // Initialize

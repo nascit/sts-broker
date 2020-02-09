@@ -8,26 +8,34 @@ Globals:
 
 Parameters:
 
+  EnvType:
+    Type: String
+    Description: The type of environment to create.
+    Default: prod
+    AllowedValues:
+      - dev
+      - prod
+    ConstraintDescription: must specify prod or dev.
   RequestTableName:
     Description: Name of the DynamoDB Table storing the requests for temporary credentials
     Type: String
     Default: permission_requests
-  RoleMappingTableName:
-    Description: Name of the DynamoDB Table storing the team/role mapping
+  TeamPreferencesTableName:
+    Description: Name of the DynamoDB Table storing the team info and role mapping.
     Type: String
-    Default: role_mapping
+    Default: team_preferences
   TempCredentialsTableName:
     Description: Name of the DynamoDB Table storing the temporary credentials
     Type: String
     Default: temp_credentials
-  AssumedRoleName:
-    Description: Name of the role to be assumed
-    Type: String
-    Default: TeamXRole
+#  AssumedRoleName:
+#    Description: Name of the role to be assumed
+#    Type: String
+#    Default: !Sub "DefaultAssumedRole-${AWS::Region}"
   EmailID:
     AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
     ConstraintDescription: This is not a valid email id.
-    Default: "timoteo.asn@gmail.com"
+    Default: timoteo.asn@gmail.com
     Description: Enter Approvers Email ID
     MaxLength: '64'
     MinLength: '1'
@@ -90,6 +98,7 @@ Resources:
         Variables:
           APPROVAL_SNS_TOPIC: !Ref ApprovalNotificationTopic #!GetAtt ApprovalNotificationTopic.TopicName
           APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
+          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
       Events:
         DynamoDB:
           Type: DynamoDB
@@ -111,8 +120,7 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          ASSUMED_ROLE: !GetAtt AssumedRole.Arn
-          ROLE_MAPPING_TABLE: !Ref RoleMappingTableName
+          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
           REQUESTS_TABLE: !Ref RequestTableName
           TEMP_CREDENTIALS_TABLE: !Ref TempCredentialsTableName
       Events:
@@ -181,7 +189,7 @@ Resources:
             Resource: "*" #!GetAtt AssumedRole.Arn # Resource field should contain every possible role that can be assumed.
 
   # For simplicity, the role to be assumed is created within the stack,
-  # but in real world this role should already be created and mapped on RoleMappingTableName
+  # but in real world this role should already be created and mapped on TeamPreferencesTableName
   AssumedRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -194,7 +202,8 @@ Resources:
                 - !GetAtt LambdaExecutionRole.Arn
             Action:
               - 'sts:AssumeRole'
-      RoleName: !Ref AssumedRoleName
+      RoleName: !Sub "DefaultAssumedRole-${EnvType}"
+      #!Ref AssumedRoleName
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
         - arn:aws:iam::aws:policy/AmazonSQSFullAccess
@@ -219,13 +228,13 @@ Resources:
       StreamSpecification:
         StreamViewType: NEW_IMAGE
 
-  RoleMappingTable:
+  TeamPreferencesTable:
     Type: 'AWS::DynamoDB::Table'
     Properties:
       ProvisionedThroughput:
         WriteCapacityUnits: 1
         ReadCapacityUnits: 1
-      TableName: !Ref RoleMappingTableName
+      TableName: !Ref TeamPreferencesTableName
       AttributeDefinitions:
         - AttributeName: teamid
           AttributeType: S
@@ -253,21 +262,30 @@ Resources:
         AttributeName: 'expiration'
 
   ApprovalNotificationTopic:
-    Type: "AWS::SNS::Topic"
+    Type: AWS::SNS::Topic
     Properties:
-      Subscription:
-        -
-          Endpoint: !Ref EmailID
-          Protocol: email
-      TopicName: "ApprovalNotificationTopic"
+      TopicName: ApprovalNotificationTopic
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !Ref EmailID
+      FilterPolicy:
+        channel:
+          - email
+      Protocol: email
+      TopicArn: !Ref ApprovalNotificationTopic
 
 Outputs:
   AssumedRoleARN:
-    Description: "Default assumed Role ARN"
+    Description: Default assumed Role ARN
     Value: !GetAtt AssumedRole.Arn
   ApprovalNotificationTopicName:
-    Description: "Name of the approval SNS topic"
+    Description: Name of the approval SNS topic
     Value: !GetAtt ApprovalNotificationTopic.TopicName
+  ApprovalNotificationTopicARN:
+    Description: ARN of the approval SNS topic
+    Value: !Ref ApprovalNotificationTopic
   STSBrokerAPI:
-    Description: "API Gateway endpoint URL"
+    Description: API Gateway endpoint URL
     Value: !Sub "https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
