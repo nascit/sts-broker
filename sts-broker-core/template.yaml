@@ -8,14 +8,12 @@ Globals:
 
 Parameters:
 
-  EnvType:
+  CognitoUserPoolName:
     Type: String
-    Description: The type of environment to create.
-    Default: prod
-    AllowedValues:
-      - dev
-      - prod
-    ConstraintDescription: must specify prod or dev.
+    Default: STSBrokerUserPool
+  CognitoUserPoolClientName:
+    Type: String
+    Default: STSBrokerUserPoolClient
   RequestTableName:
     Description: Name of the DynamoDB Table storing the requests for temporary credentials
     Type: String
@@ -28,10 +26,7 @@ Parameters:
     Description: Name of the DynamoDB Table storing the temporary credentials
     Type: String
     Default: temp_credentials
-#  AssumedRoleName:
-#    Description: Name of the role to be assumed
-#    Type: String
-#    Default: !Sub "DefaultAssumedRole-${AWS::Region}"
+#  TODO: Make Default AssumedRoleName a parameter
   EmailID:
     AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
     ConstraintDescription: This is not a valid email id.
@@ -40,20 +35,40 @@ Parameters:
     MaxLength: '64'
     MinLength: '1'
     Type: String
-  CognitoUserPoolARN:
-    Description: ARN of the Cognito User Pool
-    Type: String
-    Default: MyUserPool
-  CognitoUserPoolClientID:
-    Description: Cognito User Pool Client ID
-    Type: String
-    Default: MyUserPoolClient
   Stage:
     Description: Stage name (Dev, Prod)
+    AllowedValues:
+      - Dev
+      - Prod
     Type: String
-    Default: Dev
+    Default: Prod
+    ConstraintDescription: Must specify Prod or Dev.
 
 Resources:
+
+  MyCognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${CognitoUserPoolName}-${Stage}"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+      UsernameAttributes:
+        - email
+      Schema:
+        - AttributeDataType: String
+          Name: email
+          Required: false
+        - AttributeDataType: String
+          Name: team
+          Mutable: true
+
+  MyCognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref MyCognitoUserPool
+      ClientName: !Ref CognitoUserPoolClientName
+      GenerateSecret: false
 
   STSBrokerAPI:
     Type: AWS::Serverless::Api
@@ -64,8 +79,7 @@ Resources:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
           CognitoAuthorizer:
-            UserPoolArn: !Ref CognitoUserPoolARN
-
+            UserPoolArn: !GetAtt MyCognitoUserPool.Arn
 
   StorePermissionRequestFunction:
     Type: AWS::Serverless::Function
@@ -202,8 +216,7 @@ Resources:
                 - !GetAtt LambdaExecutionRole.Arn
             Action:
               - 'sts:AssumeRole'
-      RoleName: !Sub "DefaultAssumedRole-${EnvType}"
-      #!Ref AssumedRoleName
+      RoleName: !Sub "DefaultAssumedRole-${Stage}"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
         - arn:aws:iam::aws:policy/AmazonSQSFullAccess
@@ -289,3 +302,11 @@ Outputs:
   STSBrokerAPI:
     Description: API Gateway endpoint URL
     Value: !Sub "https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
+  CognitoUserPoolARN:
+    Value: !GetAtt MyCognitoUserPool.Arn
+  CognitoUserPoolID:
+    Description: Cognito User Pool ID
+    Value: !Ref MyCognitoUserPool
+  CognitoUserPoolClientID:
+    Description: Cognito User Pool Client ID
+    Value: !Ref MyCognitoUserPoolClient

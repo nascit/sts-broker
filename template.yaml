@@ -4,33 +4,23 @@ Description: STS Broker
 
 Parameters:
 
-  EnvType:
-    Type: String
-    Description: The type of environment to create.
-    Default: prod
+  Stage:
+    Description: Stage name (Dev, Prod)
     AllowedValues:
-      - dev
-      - prod
-    ConstraintDescription: must specify prod or dev.
+      - Dev
+      - Prod
+    Type: String
+    Default: Prod
+    ConstraintDescription: Must specify Prod or Dev.
 
 Resources:
-
-  AuthApp:
-    Type: AWS::Serverless::Application
-    Properties:
-      Location: authentication/template.yaml
-      Parameters:
-        CognitoUserPoolName: STSBrokerUserPool
-        CognitoUserPoolClientName: STSBrokerUserPoolClient
 
   STSBrokerCore:
     Type: AWS::Serverless::Application
     Properties:
       Location: sts-broker-core/template.yaml
       Parameters:
-        CognitoUserPoolARN: !GetAtt AuthApp.Outputs.CognitoUserPoolARN
-        CognitoUserPoolClientID: !GetAtt AuthApp.Outputs.CognitoUserPoolClientID
-        EnvType: !Ref EnvType
+        Stage: !Ref Stage
 
   NotifySlack:
     Type: AWS::Serverless::Application
@@ -45,7 +35,4 @@ Outputs:
     Value: !GetAtt STSBrokerCore.Outputs.STSBrokerAPI
   CognitoUserPoolID:
     Description: Cognito User Pool ID
-    Value: !GetAtt AuthApp.Outputs.CognitoUserPoolID
-  CognitoUserPoolClientID:
-    Description: Cognito User Pool Client ID
-    Value: !GetAtt AuthApp.Outputs.CognitoUserPoolClientID
+    Value: !GetAtt STSBrokerCore.Outputs.CognitoUserPoolID
