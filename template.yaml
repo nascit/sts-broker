@@ -10,7 +10,7 @@ Parameters:
       - Dev
       - Prod
     Type: String
-    Default: Prod
+    Default: Dev
     ConstraintDescription: Must specify Prod or Dev.
 
 Resources:
@@ -36,3 +36,6 @@ Outputs:
   CognitoUserPoolID:
     Description: Cognito User Pool ID
     Value: !GetAtt STSBrokerCore.Outputs.CognitoUserPoolID
+  CognitoUserPoolClientID:
+    Description: Cognito User Pool client
+    Value: !GetAtt STSBrokerCore.Outputs.CognitoUserPoolClientID

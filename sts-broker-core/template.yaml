@@ -41,8 +41,21 @@ Parameters:
       - Dev
       - Prod
     Type: String
-    Default: Prod
+    Default: Dev
     ConstraintDescription: Must specify Prod or Dev.
+  # TODO: Use bukcet/key instead
+  EvaluatePermissionRequestCodeUriBucket:
+    Description: S3 Uri location for Lambda deployment package.
+    Type: String
+    Default: ''
+  EvaluatePermissionRequestCodeUriKey:
+    Description: S3 Uri location for Lambda deployment package.
+    Type: String
+    Default: ''
+
+Conditions:
+  HasEvaluatePermissionRequestCodeUri: !Not [ !Or [ !Equals [!Ref EvaluatePermissionRequestCodeUriBucket, ''], !Equals [!Ref EvaluatePermissionRequestCodeUriKey, ''] ] ]
+  NotHasEvaluatePermissionRequestCodeUri: !Or [ !Equals [!Ref EvaluatePermissionRequestCodeUriBucket, ''], !Equals [!Ref EvaluatePermissionRequestCodeUriKey, ''] ]
 
 Resources:
 
@@ -100,19 +113,46 @@ Resources:
             Path: /credentials/request
             Method: POST
 
-  EvaluatePermissionRequestFunction:
+  ValidatePermissionRequestExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: "CallStepFunctions"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "states:StartExecution"
+                Resource:
+                  - !Ref EvaluatePermissionRequestStateMachine
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  ValidatePermissionRequestFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: evaluate_request/
-      Description: This function will listen to updates on permission request and either send "Approval URL" for security admin or notify user of approval status
-      Handler: app.lambdaHandler
+      Description: This function will listen to updates on permission request table, validate it and send to the 'EvaluatePermissionRequest' state machine. If request was approved, it will notify the end-user.
+      Handler: validate.lambdaHandler
       Runtime: nodejs12.x
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !GetAtt ValidatePermissionRequestExecutionRole.Arn
       Environment:
         Variables:
-          APPROVAL_SNS_TOPIC: !Ref ApprovalNotificationTopic #!GetAtt ApprovalNotificationTopic.TopicName
+          APPROVAL_SNS_TOPIC: !Ref ApprovalNotificationTopic
           APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
           TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
+          EVALUATE_REQUEST_STATE_MACHINE: !Ref EvaluatePermissionRequestStateMachine
       Events:
         DynamoDB:
           Type: DynamoDB
@@ -122,7 +162,62 @@ Resources:
                 - RequestCredentialsRecords
                 - StreamArn
             StartingPosition: TRIM_HORIZON
+            MaximumRetryAttempts: 5
             BatchSize: 5
+
+  EvaluatePermissionRequestFunctionCustom:
+    Type: AWS::Serverless::Function
+    Condition: HasEvaluatePermissionRequestCodeUri
+    Properties:
+      CodeUri:
+        Bucket: !Ref EvaluatePermissionRequestCodeUriBucket
+        Key: !Ref EvaluatePermissionRequestCodeUriKey
+      Description: This function will contain your own custom business logic to decide whether this permission request should be automatically approved or not.
+      Handler: evaluate.lambdaHandler
+      Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
+
+  EvaluatePermissionRequestFunctionDefault:
+    Type: AWS::Serverless::Function
+    Condition: NotHasEvaluatePermissionRequestCodeUri
+    Properties:
+      CodeUri: evaluate_request/
+      Description: This function will contain a default business logic to decide whether this permission request should be automatically approved or not.
+      Handler: evaluate.lambdaHandler
+      Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
+
+  AutoApprovePermissionRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: evaluate_request/
+      Description: This function will automatically approve the permission request by making a request to the approval URL.
+      Handler: approve.lambdaHandler
+      Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
+          APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
+
+  ManualApprovePermissionRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: evaluate_request/
+      Description: This function will send the approval URL to the security admin based on the preferred channel choice.
+      Handler: manual_approve.lambdaHandler
+      Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
+          APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
 
   ApproveRequestFunction:
     Type: AWS::Serverless::Function
@@ -145,16 +240,15 @@ Resources:
             Path: /credentials/approve
             Method: GET
             Auth:
-              Authorizer: NONE
+              Authorizer: NONE # TODO: Secure this API
             RequestParameters:
               - method.request.querystring.requestid
-#              - method.request.querystring.token
 
   RetrieveCredentialsFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: retrieve_credentials/
-      Description: This function will retrieve the credentials from DynamoDB table and return to the end user.
+      Description: This function will retrieve the credentials from DynamoDB table and return them to the end user.
       Handler: app.lambdaHandler
       Runtime: nodejs12.x
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -183,6 +277,7 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - 'sts:AssumeRole'
+      # TODO: Avoid using Full Access manged policies
       ManagedPolicyArns:
         - !Ref STSAssumeManagedPolicy
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
@@ -202,7 +297,7 @@ Resources:
               - sts:AssumeRole
             Resource: "*" #!GetAtt AssumedRole.Arn # Resource field should contain every possible role that can be assumed.
 
-  # For simplicity, the role to be assumed is created within the stack,
+  # For simplicity, a default role to be assumed is created within the stack,
   # but in real world this role should already be created and mapped on TeamPreferencesTableName
   AssumedRole:
     Type: 'AWS::IAM::Role'
@@ -288,6 +383,87 @@ Resources:
           - email
       Protocol: email
       TopicArn: !Ref ApprovalNotificationTopic
+
+  StepFunctionsServiceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: !Join ["", ["/", !Ref "AWS::StackName", "/"]]
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AllowStepFunctionsServiceToAssumeRole"
+            Effect: "Allow"
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              Service:
+                - !Sub "states.${AWS::Region}.amazonaws.com"
+      Policies:
+        - PolicyName: "CallLambdaFunctions"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource:
+                  !If
+                  - HasEvaluatePermissionRequestCodeUri
+                  - !Sub ${EvaluatePermissionRequestFunctionCustom.Arn}
+                  - !Sub ${EvaluatePermissionRequestFunctionDefault.Arn}
+
+
+  EvaluatePermissionRequestStateMachine:
+    Type: "AWS::StepFunctions::StateMachine"
+    Properties:
+#      DependsOn: ValidatePermissionRequestFunction
+      StateMachineName: EvaluatePermissionRequest
+      RoleArn: !GetAtt StepFunctionsServiceRole.Arn
+      DefinitionString: !Sub |-
+        {
+          "Comment": "Evaluate permission request",
+          "StartAt": "Evaluate",
+          "States": {
+            "Evaluate": {
+              "Type": "Task",
+              "Resource": "${ApproveRequestFunction.Arn}",
+              "Next": "ChoiceState"
+            },
+            "ChoiceState": {
+              "Type" : "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.automated_approval",
+                  "BooleanEquals": true,
+                  "Next": "automatic_approved"
+                },
+                {
+                  "Variable": "$.automated_approval",
+                  "BooleanEquals": false,
+                  "Next": "manual_approval"
+                }
+              ],
+              "Default": "DefaultState"
+            },
+            "automatic_approved": {
+              "Type" : "Task",
+              "Resource": "${AutoApprovePermissionRequestFunction.Arn}",
+              "End": true
+            },
+            "manual_approval": {
+              "Type" : "Task",
+              "Resource": "${ManualApprovePermissionRequestFunction.Arn}",
+              "End": true
+            },
+            "DefaultState": {
+              "Type": "Fail",
+              "Error": "DefaultStateError",
+              "Cause": "No Matches!"
+            }
+          }
+        }
 
 Outputs:
   AssumedRoleARN:
