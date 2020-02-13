@@ -6,17 +6,17 @@ export api_url=$(aws cloudformation describe-stacks --stack-name sts-broker --qu
 
 export user_pool_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolID'].OutputValue" --output text --profile stsbroker --region us-east-2)
 
-export user_pool_client_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientID'].OutputValue" --output text --profile stsbroker)
+export user_pool_client_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientID'].OutputValue" --output text --profile stsbroker --region us-east-2)
 
-cognitocurl --cognitoclient u1rb72m9a38uori2b89hs6ve2 --userpool us-east-1_8ZSKgf22e --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @policy.json"
+cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @policy.json"
 
-cognitocurl --cognitoclient u1rb72m9a38uori2b89hs6ve2 --userpool us-east-1_8ZSKgf22e --run "curl -X GET $api_url'credentials/get'"
+cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --run "curl -X GET $api_url'credentials/get'"
 
 # Confirm user
-aws cognito-idp admin-confirm-sign-up --user-pool-id us-east-1_8ZSKgf22e --username nascit@amazon.com --profile stsbroker
+aws cognito-idp admin-confirm-sign-up --user-pool-id $user_pool_id --username nascit@amazon.com --profile stsbroker --region us-east-2
 
 # Change password
-aws cognito-idp admin-set-user-password --user-pool-id us-east-1_8ZSKgf22e --username nascit@amazon.com --password password --permanent --profile stsbroker
+aws cognito-idp admin-set-user-password --user-pool-id $user_pool_id --username nascit@amazon.com --password password --permanent --profile stsbroker --region us-east-2
 
 # Update User attribute
-aws cognito-idp admin-update-user-attributes --user-pool-id us-east-1_8ZSKgf22e --username nascit@amazon.com --user-attributes Name='custom:team',Value=myteam --profile stsbroker
+aws cognito-idp admin-update-user-attributes --user-pool-id $user_pool_id --username nascit@amazon.com --user-attributes Name='custom:team',Value=myteam --profile stsbroker --region us-east-2

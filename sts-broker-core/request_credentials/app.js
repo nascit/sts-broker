@@ -6,21 +6,30 @@ const dynamodb = require('aws-sdk/clients/dynamodb');
 const docClient = new dynamodb.DocumentClient();
 
 exports.lambdaHandler = async (event, context, callback) => {
-//    console.info('received:', event);
+
+    console.log(event.body);
 
     if (!event.requestContext.authorizer) {
         errorResponse('Authorization not configured.', context.awsRequestId, callback);
         return;
     }
+    // TODO: User can also pass up to 10 managed policy ARNs
 
-//    console.log(event.requestContext.authorizer.claims);
+    // TODO: User can pass tags
 
-    var policy = JSON.parse(event.body);
+    var inline_policy = JSON.parse(event.body).inline_policy;
+    var policyARNs = JSON.parse(event.body).policyARNs;
+    var tags = JSON.parse(event.body).tags;
 
     var userid = event.requestContext.authorizer.claims.sub;
-    var permissions_requested = policy.Statement;
+    var inline_policy = inline_policy["Statement"];
 
-    console.log(permissions_requested);
+    console.log("User has requested the following policies: ");
+    console.log(inline_policy);
+    console.log(policyARNs);
+
+    console.log("Tags passed");
+    console.log(tags);
 
     var params = {
         TableName: process.env.REQUESTS_TABLE,
@@ -29,7 +38,9 @@ exports.lambdaHandler = async (event, context, callback) => {
             userid: userid,
             email: event.requestContext.authorizer.claims.email,  // Retrieve user info from JWT token
             team: event.requestContext.authorizer.claims['custom:team'],
-            permissions_requested: permissions_requested,
+            inline_policy: inline_policy,
+            policyARNs: policyARNs,
+            tags: tags,
             timestamp: new Date().getTime()
         },
     };

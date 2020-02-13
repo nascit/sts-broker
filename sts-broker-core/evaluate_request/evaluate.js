@@ -8,7 +8,7 @@ exports.lambdaHandler = async (event, context, callback) => {
 
     console.log(event);
 
-    if (event.team == "myteam") {
+    if (event.permission_request.team == "myteam") {
         console.log("Manual approval needed");
         var approved = false;
     } else {

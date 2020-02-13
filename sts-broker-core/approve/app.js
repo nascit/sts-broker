@@ -8,8 +8,6 @@ const docClient = new dynamodb.DocumentClient();
 
 exports.lambdaHandler = async (event) => {
 
-    // TODO: event should contain permission requestid, token (to validate approval request)
-
     // STEP 1 - Map the policy from the requests table to be passed on the assumeRole API call
 
     var params = {
@@ -22,8 +20,10 @@ exports.lambdaHandler = async (event) => {
 
     var permission_request = await docClient.get(params).promise();
 
+    // Get inline policy requested
+
     var statements = []
-    permission_request.Item.permissions_requested.forEach(function(value){
+    permission_request.Item.inline_policy.forEach(function(value){
         var statement = {
             "Effect": "Allow",
             "Action": value.Action,
@@ -37,16 +37,35 @@ exports.lambdaHandler = async (event) => {
       "Statement": statements
     };
 
-    console.log(JSON.stringify(policy));
+    // Get managed policies requested
 
-    // TODO: STEP 2 - Get role association based on user info from 'team_preferences' table
+    var managed_policies = []
+    permission_request.Item.policyARNs.forEach(function(policy_arn){
+        var arn = {
+            arn: policy_arn
+        }
+        managed_policies.push(arn);
+    });
+
+    // Get tags passed
+
+    var tags = []
+    permission_request.Item.tags.forEach(function(tag){
+        var tag = {
+            Key: tag["Key"],
+            Value: tag["Value"]
+        }
+        tags.push(tag);
+    });
+
+    // STEP 2 - Get role association based on user info from 'team_preferences' table
 
     var team = permission_request.Item.team;
 
     var params = {
         TableName: process.env.TEAM_PREFERENCES_TABLE,
         Key: {
-            teamid: team
+            team_id: team
         }
     };
 
@@ -54,11 +73,15 @@ exports.lambdaHandler = async (event) => {
 
     var role_assumed = team_info.Item.role;
 
+    // TODO: If team does not have a IAM role associated, use DEFAULT_ASSUMED_ROLE
+
     // STEP 3 - ASSUME ROLE
 
     var params = {
-        DurationSeconds: 3600, // TODO: session duration can also be a parameter
+        DurationSeconds: 3600, // TODO: Session duration can also be a parameter
         Policy: JSON.stringify(policy),
+        PolicyArns: managed_policies,
+        Tags: tags,
         RoleArn: role_assumed,
         RoleSessionName: event.queryStringParameters.userid
     };
@@ -101,6 +124,7 @@ exports.lambdaHandler = async (event) => {
         'statusCode': 200,
         'body': JSON.stringify({
             message: 'Permissions granted successfully.',
+            requestid: event.queryStringParameters.requestid
         })
     }
 

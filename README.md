@@ -2,7 +2,7 @@
 
 This project can be used as a reference for a serverless Identity Broker architecture.
 
-- Why would you need a Identity Token Broker?
+- Why would you need a Identity Broker?
     - Limit of how many IAM roles/users an AWS account can have.
     - Make it easier to manage permissions used among IAM roles/users.
     - Allow to register every permission request made (traceability).
@@ -53,7 +53,68 @@ To deploy the application, use the `sam deploy` command.
 $ sam deploy --template-file packaged.yaml --stack-name sts-broker --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --region AWS_REGION --profile <PROFILE>
 ```
 
+## Customize your Identity Broker
 
+#### - Populate team preferences table:
+
+Your 'team_preferences' table must have the following attributes:
+
+team_id (Partition Key):  A unique ID for the team the federated user belongs to. This must be available on the user ID token. User Pool has a custom attribute named 'team'.
+
+role: The IAM Role members of this team will be able to assume. This role must include Lambda execution role in its Trust Relationship.
+
+Example:
+```bash
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "<LAMBDA_EXECUTION_ROLE_ARN>"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+preferred_channel: If manual approval is needed, where to contact the security admin (email or slack).
+
+*** If preferred_channel is 'email' but there is no email defined for this team, we will send the notification for the e-mail passed on the DefaultSecurityAdminEmailID parameter.
+
+email: Security admin e-mail if preferred channel is 'email'. If this is defined on the team_preferences table, we also need to create a subscription on the SNS topic with the following subscription filter policy:
+```bash
+{
+  "channel": [
+    "email"
+  ],
+  "team": [
+    "<TEAM_ID>"
+  ]
+}
+```
+slack_webhook_url: Slack channel webhook URL if preferred channel is 'slack'.
+
+
+#### - Use your own permission request evaluation code:
+
+Each company will have different rules to automatically approve a permission request. 
+
+Hence, you have the option to provide a S3 bucket location with your own Lambda function deployment package zip file.
+
+Your code will receive as the input the permission_request object and team info.
+
+It simply needs to return an "automated_approval" attribute:
+
+```bash
+const response = {
+    automated_approval: <true or false>
+};
+
+return response;
+```
+
+If you do not provide your custom permission request evaluation code, a default one will be used.
 
 ## Invoke STS Broker
 

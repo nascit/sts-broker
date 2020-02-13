@@ -26,8 +26,7 @@ Parameters:
     Description: Name of the DynamoDB Table storing the temporary credentials
     Type: String
     Default: temp_credentials
-#  TODO: Make Default AssumedRoleName a parameter
-  EmailID:
+  DefaultSecurityAdminEmailID:
     AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
     ConstraintDescription: This is not a valid email id.
     Default: timoteo.asn@gmail.com
@@ -43,13 +42,14 @@ Parameters:
     Type: String
     Default: Dev
     ConstraintDescription: Must specify Prod or Dev.
-  # TODO: Use bukcet/key instead
   EvaluatePermissionRequestCodeUriBucket:
-    Description: S3 Uri location for Lambda deployment package.
+    Description: S3 Uri location for Lambda deployment package (S3 Bucket).
     Type: String
     Default: ''
   EvaluatePermissionRequestCodeUriKey:
-    Description: S3 Uri location for Lambda deployment package.
+    AllowedPattern: '^$|.*(zip)'
+    ConstraintDescription: This must be a .zip file.
+    Description: S3 Uri location for Lambda deployment package (S3 Bucket key).
     Type: String
     Default: ''
 
@@ -124,7 +124,7 @@ Resources:
               Service:
                 - lambda.amazonaws.com
             Action:
-              - 'sts:AssumeRole'
+              - sts:AssumeRole
       Policies:
         - PolicyName: "CallStepFunctions"
           PolicyDocument:
@@ -149,7 +149,6 @@ Resources:
       Role: !GetAtt ValidatePermissionRequestExecutionRole.Arn
       Environment:
         Variables:
-          APPROVAL_SNS_TOPIC: !Ref ApprovalNotificationTopic
           APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
           TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
           EVALUATE_REQUEST_STATE_MACHINE: !Ref EvaluatePermissionRequestStateMachine
@@ -198,7 +197,7 @@ Resources:
     Properties:
       CodeUri: evaluate_request/
       Description: This function will automatically approve the permission request by making a request to the approval URL.
-      Handler: approve.lambdaHandler
+      Handler: auto_approve.lambdaHandler
       Runtime: nodejs12.x
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
@@ -216,6 +215,7 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
+          APPROVAL_SNS_TOPIC: !Ref ApprovalNotificationTopic
           TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
           APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
 
@@ -229,6 +229,7 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
+          DEFAULT_ASSUMED_ROLE: !GetAtt AssumedRole.Arn
           TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
           REQUESTS_TABLE: !Ref RequestTableName
           TEMP_CREDENTIALS_TABLE: !Ref TempCredentialsTableName
@@ -276,7 +277,7 @@ Resources:
               Service:
                 - lambda.amazonaws.com
             Action:
-              - 'sts:AssumeRole'
+              - sts:AssumeRole
       # TODO: Avoid using Full Access manged policies
       ManagedPolicyArns:
         - !Ref STSAssumeManagedPolicy
@@ -284,6 +285,8 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AmazonSNSFullAccess
 
+  # TODO: Ideally Resource field should only contain possible IAM roles that can be assumed.
+  # However, as the assumed roles can be dynamically inserted on the team_preferences table, this cannot be done
   STSAssumeManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -295,10 +298,12 @@ Resources:
             Effect: Allow
             Action:
               - sts:AssumeRole
-            Resource: "*" #!GetAtt AssumedRole.Arn # Resource field should contain every possible role that can be assumed.
+              - sts:TagSession
+            Resource: "*"
 
   # For simplicity, a default role to be assumed is created within the stack,
-  # but in real world this role should already be created and mapped on TeamPreferencesTableName
+  # Ideally role to be assumed should already be created and mapped on TeamPreferencesTableName
+  # This role will only be assumed when the team does not have any mapping IAM role
   AssumedRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -310,18 +315,17 @@ Resources:
               AWS:
                 - !GetAtt LambdaExecutionRole.Arn
             Action:
-              - 'sts:AssumeRole'
-      RoleName: !Sub "DefaultAssumedRole-${Stage}"
-      ManagedPolicyArns:
+              - sts:AssumeRole
+              - sts:TagSession
+      RoleName: !Sub "DefaultAssumedRole-${AWS::Region}"
+      ManagedPolicyArns: # TODO: Managed policies for Default Role should be parameters
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
         - arn:aws:iam::aws:policy/AmazonSQSFullAccess
 
   RequestCredentialsRecords:
     Type: 'AWS::DynamoDB::Table'
     Properties:
-      ProvisionedThroughput:
-        WriteCapacityUnits: 1
-        ReadCapacityUnits: 1
+      BillingMode: PAY_PER_REQUEST
       TableName: !Ref RequestTableName
       AttributeDefinitions:
         - AttributeName: requestid
@@ -339,23 +343,19 @@ Resources:
   TeamPreferencesTable:
     Type: 'AWS::DynamoDB::Table'
     Properties:
-      ProvisionedThroughput:
-        WriteCapacityUnits: 1
-        ReadCapacityUnits: 1
+      BillingMode: PAY_PER_REQUEST
       TableName: !Ref TeamPreferencesTableName
       AttributeDefinitions:
-        - AttributeName: teamid
+        - AttributeName: team_id
           AttributeType: S
       KeySchema:
         - KeyType: HASH
-          AttributeName: teamid
+          AttributeName: team_id
 
   TemporaryCredentialsTable:
     Type: 'AWS::DynamoDB::Table'
     Properties:
-      ProvisionedThroughput:
-        WriteCapacityUnits: 1
-        ReadCapacityUnits: 1
+      BillingMode: PAY_PER_REQUEST
       TableName: !Ref TempCredentialsTableName
       AttributeDefinitions:
         - AttributeName: userid
@@ -377,10 +377,10 @@ Resources:
   EmailSubscription:
     Type: AWS::SNS::Subscription
     Properties:
-      Endpoint: !Ref EmailID
+      Endpoint: !Ref DefaultSecurityAdminEmailID
       FilterPolicy:
         channel:
-          - email
+          - default
       Protocol: email
       TopicArn: !Ref ApprovalNotificationTopic
 
@@ -396,7 +396,7 @@ Resources:
           - Sid: "AllowStepFunctionsServiceToAssumeRole"
             Effect: "Allow"
             Action:
-              - "sts:AssumeRole"
+              - sts:AssumeRole
             Principal:
               Service:
                 - !Sub "states.${AWS::Region}.amazonaws.com"
@@ -409,61 +409,68 @@ Resources:
                 Action:
                   - "lambda:InvokeFunction"
                 Resource:
-                  !If
-                  - HasEvaluatePermissionRequestCodeUri
-                  - !Sub ${EvaluatePermissionRequestFunctionCustom.Arn}
-                  - !Sub ${EvaluatePermissionRequestFunctionDefault.Arn}
-
+                  - !If
+                    - HasEvaluatePermissionRequestCodeUri
+                    - !Sub ${EvaluatePermissionRequestFunctionCustom.Arn}
+                    - !Sub ${EvaluatePermissionRequestFunctionDefault.Arn}
+                  - !GetAtt ManualApprovePermissionRequestFunction.Arn
+                  - !GetAtt AutoApprovePermissionRequestFunction.Arn
 
   EvaluatePermissionRequestStateMachine:
     Type: "AWS::StepFunctions::StateMachine"
     Properties:
-#      DependsOn: ValidatePermissionRequestFunction
       StateMachineName: EvaluatePermissionRequest
       RoleArn: !GetAtt StepFunctionsServiceRole.Arn
-      DefinitionString: !Sub |-
-        {
-          "Comment": "Evaluate permission request",
-          "StartAt": "Evaluate",
-          "States": {
-            "Evaluate": {
-              "Type": "Task",
-              "Resource": "${ApproveRequestFunction.Arn}",
-              "Next": "ChoiceState"
-            },
-            "ChoiceState": {
-              "Type" : "Choice",
-              "Choices": [
-                {
-                  "Variable": "$.automated_approval",
-                  "BooleanEquals": true,
-                  "Next": "automatic_approved"
-                },
-                {
-                  "Variable": "$.automated_approval",
-                  "BooleanEquals": false,
-                  "Next": "manual_approval"
-                }
-              ],
-              "Default": "DefaultState"
-            },
-            "automatic_approved": {
-              "Type" : "Task",
-              "Resource": "${AutoApprovePermissionRequestFunction.Arn}",
-              "End": true
-            },
-            "manual_approval": {
-              "Type" : "Task",
-              "Resource": "${ManualApprovePermissionRequestFunction.Arn}",
-              "End": true
-            },
-            "DefaultState": {
-              "Type": "Fail",
-              "Error": "DefaultStateError",
-              "Cause": "No Matches!"
+      DefinitionString:
+        !Sub
+        - |-
+          {
+            "Comment": "Evaluate permission request",
+            "StartAt": "Evaluate",
+            "States": {
+              "Evaluate": {
+                "Type": "Task",
+                "Resource": "${EvaluateFunction}",
+                "ResultPath": "$.evaluation",
+                "OutputPath": "$",
+                "Next": "ChoiceState"
+              },
+              "ChoiceState": {
+                "Type" : "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.evaluation.automated_approval",
+                    "BooleanEquals": true,
+                    "Next": "automatic_approved"
+                  },
+                  {
+                    "Variable": "$.evaluation.automated_approval",
+                    "BooleanEquals": false,
+                    "Next": "manual_approval"
+                  }
+                ],
+                "Default": "ErrorState"
+              },
+              "automatic_approved": {
+                "Type" : "Task",
+                "Resource": "${AutoApprovePermissionRequestFunction}",
+                "End": true
+              },
+              "manual_approval": {
+                "Type" : "Task",
+                "Resource": "${ManualApprovePermissionRequestFunction}",
+                "End": true
+              },
+              "ErrorState": {
+                "Type": "Fail",
+                "Error": "DefaultErrorState",
+                "Cause": "No Matches!"
+              }
             }
           }
-        }
+        - EvaluateFunction: !If [ HasEvaluatePermissionRequestCodeUri, !GetAtt EvaluatePermissionRequestFunctionCustom.Arn, !GetAtt EvaluatePermissionRequestFunctionDefault.Arn ]
+          AutoApprovePermissionRequestFunction: !GetAtt AutoApprovePermissionRequestFunction.Arn
+          ManualApprovePermissionRequestFunction: !GetAtt ManualApprovePermissionRequestFunction.Arn
 
 Outputs:
   AssumedRoleARN:
