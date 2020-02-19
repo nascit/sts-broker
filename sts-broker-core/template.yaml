@@ -7,7 +7,6 @@ Globals:
     Timeout: 10
 
 Parameters:
-
   CognitoUserPoolName:
     Type: String
     Default: STSBrokerUserPool
@@ -30,7 +29,7 @@ Parameters:
     AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
     ConstraintDescription: This is not a valid email id.
     Default: timoteo.asn@gmail.com
-    Description: Enter Approvers Email ID
+    Description: Enter Approver Email ID
     MaxLength: '64'
     MinLength: '1'
     Type: String
@@ -59,7 +58,7 @@ Conditions:
 
 Resources:
 
-  MyCognitoUserPool:
+  CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Sub "${CognitoUserPoolName}-${Stage}"
@@ -72,15 +71,34 @@ Resources:
         - AttributeDataType: String
           Name: email
           Required: false
+          Mutable: true
         - AttributeDataType: String
           Name: team
           Mutable: true
 
-  MyCognitoUserPoolClient:
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: stsbroker
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      UserPoolId: !Ref MyCognitoUserPool
+      UserPoolId: !Ref CognitoUserPool
       ClientName: !Ref CognitoUserPoolClientName
+      AllowedOAuthFlows:
+        - implicit
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - openid
+      CallbackURLs:
+        - http://localhost:3000
+      LogoutURLs:
+        - http://localhost:3000
+      SupportedIdentityProviders:
+        - COGNITO
       GenerateSecret: false
 
   STSBrokerAPI:
@@ -92,13 +110,32 @@ Resources:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
           CognitoAuthorizer:
-            UserPoolArn: !GetAtt MyCognitoUserPool.Arn
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+
+  GetTeamPoliciesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: get_policies/
+      Description: Get the policy ARNs for a specific team.
+      Handler: app.lambdaHandler
+      Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
+      Events:
+        API:
+          Type: Api
+          Properties:
+            RestApiId: !Ref STSBrokerAPI
+            Path: /policies
+            Method: GET
 
   StorePermissionRequestFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: request_credentials/
-      Description: Store permissions requests on DynamoDB Table
+      Description: Store permissions requests on DynamoDB Table.
       Handler: app.lambdaHandler
       Runtime: nodejs12.x
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -233,6 +270,7 @@ Resources:
           TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
           REQUESTS_TABLE: !Ref RequestTableName
           TEMP_CREDENTIALS_TABLE: !Ref TempCredentialsTableName
+          CONSTRUCT_URL_FUNCTION: !Ref ConstructLoginURLFunction
       Events:
         API:
           Type: Api
@@ -244,6 +282,15 @@ Resources:
               Authorizer: NONE # TODO: Secure this API
             RequestParameters:
               - method.request.querystring.requestid
+
+  ConstructLoginURLFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: signin_url/
+      Description: This function will programmatically construct a URL that gives federated users direct access to the AWS Management Console.
+      Handler: constructurl.lambdaHandler
+      Runtime: python3.7
+      Role: !GetAtt LambdaExecutionRole.Arn
 
   RetrieveCredentialsFunction:
     Type: AWS::Serverless::Function
@@ -261,7 +308,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref STSBrokerAPI
-            Path: /credentials/get
+            Path: /credentials
             Method: GET
             RequestParameters:
               - method.request.querystring.userid
@@ -284,6 +331,19 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+        - !Ref InvokeLambdaManagedPolicy
+
+  InvokeLambdaManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowLambdaInvoke
+            Effect: Allow
+            Action:
+              - "lambda:InvokeFunction"
+            Resource: "*"
 
   # TODO: Ideally Resource field should only contain possible IAM roles that can be assumed.
   # However, as the assumed roles can be dynamically inserted on the team_preferences table, this cannot be done
@@ -321,6 +381,7 @@ Resources:
       ManagedPolicyArns: # TODO: Managed policies for Default Role should be parameters
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
         - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
 
   RequestCredentialsRecords:
     Type: 'AWS::DynamoDB::Table'
@@ -342,6 +403,7 @@ Resources:
 
   TeamPreferencesTable:
     Type: 'AWS::DynamoDB::Table'
+    DeletionPolicy: Retain
     Properties:
       BillingMode: PAY_PER_REQUEST
       TableName: !Ref TeamPreferencesTableName
@@ -425,17 +487,17 @@ Resources:
         !Sub
         - |-
           {
-            "Comment": "Evaluate permission request",
-            "StartAt": "Evaluate",
+            "Comment": "Evaluate permission request state machine",
+            "StartAt": "evaluate",
             "States": {
-              "Evaluate": {
+              "evaluate": {
                 "Type": "Task",
                 "Resource": "${EvaluateFunction}",
                 "ResultPath": "$.evaluation",
                 "OutputPath": "$",
-                "Next": "ChoiceState"
+                "Next": "choice_state"
               },
-              "ChoiceState": {
+              "choice_state": {
                 "Type" : "Choice",
                 "Choices": [
                   {
@@ -486,10 +548,10 @@ Outputs:
     Description: API Gateway endpoint URL
     Value: !Sub "https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
   CognitoUserPoolARN:
-    Value: !GetAtt MyCognitoUserPool.Arn
+    Value: !GetAtt CognitoUserPool.Arn
   CognitoUserPoolID:
     Description: Cognito User Pool ID
-    Value: !Ref MyCognitoUserPool
+    Value: !Ref CognitoUserPool
   CognitoUserPoolClientID:
     Description: Cognito User Pool Client ID
-    Value: !Ref MyCognitoUserPoolClient
+    Value: !Ref CognitoUserPoolClient

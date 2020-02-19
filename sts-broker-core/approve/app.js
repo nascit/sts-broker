@@ -2,6 +2,7 @@
 
 const aws = require('aws-sdk');
 var sts = new aws.STS();
+var lambda = new aws.Lambda();
 
 const dynamodb = require('aws-sdk/clients/dynamodb');
 const docClient = new dynamodb.DocumentClient();
@@ -20,43 +21,49 @@ exports.lambdaHandler = async (event) => {
 
     var permission_request = await docClient.get(params).promise();
 
-    // Get inline policy requested
+    // Get inline policy requested (if passed)
 
-    var statements = []
-    permission_request.Item.inline_policy.forEach(function(value){
-        var statement = {
-            "Effect": "Allow",
-            "Action": value.Action,
-            "Resource": value.Resource
-        }
-        statements.push(statement)
-    });
+    var statements = [];
+    if (permission_request.Item.inline_policy) {
+        permission_request.Item.inline_policy.forEach(function(value){
+            var statement = {
+                "Effect": "Allow",
+                "Action": value.Action,
+                "Resource": value.Resource
+            };
+            statements.push(statement);
+        });
+    }
 
     const policy = {
       "Version": "2012-10-17",
       "Statement": statements
     };
 
-    // Get managed policies requested
+    // Get managed policies requested (if passed)
 
-    var managed_policies = []
-    permission_request.Item.policyARNs.forEach(function(policy_arn){
-        var arn = {
-            arn: policy_arn
-        }
-        managed_policies.push(arn);
-    });
+    var managed_policies = [];
+    if (permission_request.Item.policyARNs) {
+        permission_request.Item.policyARNs.forEach(function(policy_arn){
+            var arn = {
+                arn: policy_arn
+            };
+            managed_policies.push(arn);
+        });
+    }
 
-    // Get tags passed
+    // Get tags (if passed)
 
     var tags = []
-    permission_request.Item.tags.forEach(function(tag){
-        var tag = {
-            Key: tag["Key"],
-            Value: tag["Value"]
-        }
-        tags.push(tag);
-    });
+    if (permission_request.Item.tags) {
+        permission_request.Item.tags.forEach(function(tag){
+            var tag = {
+                Key: tag["Key"],
+                Value: tag["Value"]
+            }
+            tags.push(tag);
+        });
+    }
 
     // STEP 2 - Get role association based on user info from 'team_preferences' table
 
@@ -71,21 +78,38 @@ exports.lambdaHandler = async (event) => {
 
     var team_info = await docClient.get(params).promise();
 
-    var role_assumed = team_info.Item.role;
+    // If team does not have a IAM role associated, use DEFAULT_ASSUMED_ROLE
 
-    // TODO: If team does not have a IAM role associated, use DEFAULT_ASSUMED_ROLE
+    var role_assumed = (!team_info.Item.role)? process.env.DEFAULT_ASSUMED_ROLE: team_info.Item.role;
 
     // STEP 3 - ASSUME ROLE
 
     var params = {
         DurationSeconds: 3600, // TODO: Session duration can also be a parameter
-        Policy: JSON.stringify(policy),
+        Policy: (statements.length == 0)? null: JSON.stringify(policy),
         PolicyArns: managed_policies,
         Tags: tags,
         RoleArn: role_assumed,
         RoleSessionName: event.queryStringParameters.userid
     };
     const creds = await sts.assumeRole(params).promise();
+
+    // Invoke construct URL function.
+
+    const lambdaParams = {
+        FunctionName: process.env.CONSTRUCT_URL_FUNCTION,
+        InvocationType: 'RequestResponse',
+        LogType: 'Tail',
+        Payload: {
+            credentials: creds.Credentials
+        }
+    };
+
+    lambdaParams.Payload = JSON.stringify(lambdaParams.Payload);
+
+    const lambdaResult = await lambda.invoke(lambdaParams).promise();
+
+    const resultObject = JSON.parse(lambdaResult.Payload);
 
     // STEP 4 - Stores temporary credentials on TEMP_CREDENTIALS_TABLE table
 
@@ -94,7 +118,8 @@ exports.lambdaHandler = async (event) => {
         Item: {
             userid : event.queryStringParameters.userid,
             credentials: creds.Credentials,
-            expiration: new Date(creds.Credentials.Expiration).getTime() / 1000
+            expiration: new Date(creds.Credentials.Expiration).getTime() / 1000,
+            signin_url: resultObject.request_url
         }
     };
 
@@ -120,13 +145,28 @@ exports.lambdaHandler = async (event) => {
 
     await docClient.update(params).promise();
 
+    // Construct user response
+
+    let message = `<p>Permission request ${event.queryStringParameters.requestid} was approved!</p>`;
+
+    const html = `
+      <html>
+        <style>
+          h1 { color: #73757d; }
+        </style>
+        <body>
+          <h1>Permission request approved</h1>
+          ${message}
+        </body>
+      </html>`;
+
     const response = {
         'statusCode': 200,
-        'body': JSON.stringify({
-            message: 'Permissions granted successfully.',
-            requestid: event.queryStringParameters.requestid
-        })
-    }
+        'headers': {
+            'Content-Type': 'text/html',
+        },
+        'body': html
+    };
 
     return response;
 };

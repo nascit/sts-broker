@@ -4,7 +4,7 @@ _print_help() {
   cat <<HEREDOC
 Export Credentials
 Usage:
-  ${_ME} [<arguments>]
+  ${_ME} -c | --console
   ${_ME} -h | --help
 Options:
   -h --help  Show this screen.
@@ -14,25 +14,33 @@ HEREDOC
 _export(){
     echo "Making request to STS broker..."
 
-    json=`cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --run "curl -X GET $api_url'credentials/get'"`
+    json=`cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --hostedui hostedui.json --run "curl -X GET $api_url'credentials'"`
 
     if [ -z "$json" ]
     then
           echo "There are no current temporary variables available for user \"$2\""
     fi
 
-#    echo "$json"
     export AWS_ACCESS_KEY_ID=$(echo "$json" | jq -r '.credentials.AccessKeyId')
     export AWS_SECRET_ACCESS_KEY=$(echo "$json" | jq -r '.credentials.SecretAccessKey')
     export AWS_SESSION_TOKEN=$(echo "$json" | jq -r '.credentials.SessionToken')
+    export SIGNIN_URL=$(echo "$json" | jq -r '.signin_url')
+}
+
+_open_console(){
+    python3 -m webbrowser $SIGNIN_URL
 }
 
 _main() {
     if [[ "${1:-}" =~ ^-h|--help$ ]]
     then
-    _print_help
+      _print_help
     else
     _export $1 $2
+    if [[ "${1:-}" =~ ^-c|--console ]]
+    then
+    _open_console
+    fi
     fi
 }
 

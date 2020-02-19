@@ -28,8 +28,6 @@ exports.lambdaHandler = async (event, context, callback) => {
             } else {
                 console.log("Permission request still not approved.");
 
-                // TODO: Validate permission request before sending to State machine.
-
                 // Get user's team info
 
                 var team = request.team;

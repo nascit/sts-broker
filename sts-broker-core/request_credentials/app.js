@@ -5,44 +5,68 @@ const uuid = require('uuid');
 const dynamodb = require('aws-sdk/clients/dynamodb');
 const docClient = new dynamodb.DocumentClient();
 
+function removeEmptyStringElements(obj) {
+    for (var prop in obj) {
+        if (typeof obj[prop] === 'object') {
+            removeEmptyStringElements(obj[prop]);
+        } else if(obj[prop] === '') {
+            delete obj[prop];
+        }
+    }
+    return obj;
+}
+
 exports.lambdaHandler = async (event, context, callback) => {
 
-    console.log(event.body);
+    if (!event.body) {
+        errorResponse('No permissions requested. You need to pass either a inline policy or a list of managed policies.', context.awsRequestId, callback);
+        return;
+    }
 
     if (!event.requestContext.authorizer) {
         errorResponse('Authorization not configured.', context.awsRequestId, callback);
         return;
     }
-    // TODO: User can also pass up to 10 managed policy ARNs
-
-    // TODO: User can pass tags
 
     var inline_policy = JSON.parse(event.body).inline_policy;
     var policyARNs = JSON.parse(event.body).policyARNs;
     var tags = JSON.parse(event.body).tags;
 
+    // TODO: Validate inline policy.
+
+    if (policyARNs.length > 10) {
+        errorResponse('You cannot pass more than 10 managed policies.', context.awsRequestId, callback);
+        return;
+    }
+
+    // TODO: Check if passed managed policies belong to the team allowed policies.
+
     var userid = event.requestContext.authorizer.claims.sub;
-    var inline_policy = inline_policy["Statement"];
+    var inline_policy = (!inline_policy)? "": inline_policy["Statement"];
 
     console.log("User has requested the following policies: ");
     console.log(inline_policy);
     console.log(policyARNs);
 
-    console.log("Tags passed");
+    // TODO: Validate tags
+
+    console.log("Tags passed:");
     console.log(tags);
+
+    var item = {
+        requestid: uuid.v1(),
+        userid: userid,
+        email: event.requestContext.authorizer.claims.email,  // Retrieve user info from JWT token
+        team: event.requestContext.authorizer.claims['custom:team'],
+        inline_policy: inline_policy,
+        policyARNs: policyARNs,
+        tags: tags,
+        timestamp: new Date().getTime()
+    }
 
     var params = {
         TableName: process.env.REQUESTS_TABLE,
-        Item: {
-            requestid: uuid.v1(),
-            userid: userid,
-            email: event.requestContext.authorizer.claims.email,  // Retrieve user info from JWT token
-            team: event.requestContext.authorizer.claims['custom:team'],
-            inline_policy: inline_policy,
-            policyARNs: policyARNs,
-            tags: tags,
-            timestamp: new Date().getTime()
-        },
+        Item: removeEmptyStringElements(item),
     };
 
     const result = await docClient.put(params).promise();

@@ -1,0 +1,8 @@
+{
+  "region": "us-east-2",
+  "userPoolId": "us-east-2_LSYMlhwxh",
+  "userPoolWebClientId": "4i6hn40mh0gpsqlkanrli0puqj",
+  "redirectSignIn": "http://localhost:3000",
+  "redirectSignOut": "http://localhost:3000",
+  "domain": "stsbroker.auth.us-east-2.amazoncognito.com"
+}

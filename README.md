@@ -1,40 +1,18 @@
 # sts-broker
 
-This project can be used as a reference for a serverless Identity Broker architecture.
+This project can be used as a reference for a serverless custom Identity Broker architecture.
 
 - Why would you need a Identity Broker?
     - Limit of how many IAM roles/users an AWS account can have.
-    - Make it easier to manage permissions used among IAM roles/users.
-    - Allow to register every permission request made (traceability).
+    - Flexibility to manage permissions used among IAM roles/users.
+    - Record every permission request made (traceability).
     - Least privilege access: Avoid sharing same permissions among federated users.
-    - Dynamic permissions
-    - Implement a strong identity foundation
+    - Implement a strong identity foundation.
 
 
 ## Architecture
 
-![STS Broker Architecture](STSBrokerArchitecture.png?raw=true "STS Broker architecture")
-
-1. Federated user invokes STS broker requesting specific permissions (passing JWT token)
-2. Invoked Lambda stores the permission request on a DynamoDB table (Permissions Request Table)
-3. For new request records ("Approval" field/attribute not present), DynamoDB streams will invoke a Lambda function which will 
-    validate the permission request and send an "Approval URL" to an SNS topic
-4. Different subscribers will process the SNS message and send to the appropriate channel (Slack, Chime, E-mail)
-    * SNS component can be replaced by a Event Bridge rule
-5. Security admin clicks the "Approval URL" and invokes the Lambda function which will assume the proper role.
-6. Invoked Lambda function will:
-
-    a. Check on a DynamoDB table (Role Association table) the proper role to assume based on user info (Squad + Chapter)
-    
-    b. Invoke AssumeRole API passing an inline policy based on the user permission request
-    
-    c. Stores temporary credentials on a DynamoDB table (Temporary Credentials table) with TTL configured
-    
-    d. Update Permission request table to reflect the approval event
-7. User is notified about the approval status by subscribing to an SNS topic (Lambda checks for "Approval" field/attribute).
-8. User invokes STS broker API to retrieve the temporary credentials
-
-
+![STS Broker Architecture](https://github.com/timothyBRZ/sts-broker/raw/master/AWS%20STS%20broker.png "STS Broker architecture")
 
 ## Deploy the sample application
 
@@ -55,13 +33,15 @@ $ sam deploy --template-file packaged.yaml --stack-name sts-broker --capabilitie
 
 ## Customize your Identity Broker
 
-#### - Populate team preferences table:
+#### Populate team preferences table:
 
 Your 'team_preferences' table must have the following attributes:
 
-team_id (Partition Key):  A unique ID for the team the federated user belongs to. This must be available on the user ID token. User Pool has a custom attribute named 'team'.
+- team_id (Partition Key):  A unique ID for the team the federated user belongs to. This must be available on the user ID token. User Pool has a custom attribute named 'team'.
 
-role: The IAM Role members of this team will be able to assume. This role must include Lambda execution role in its Trust Relationship.
+- role: The IAM Role members of this team will be able to assume. This role must include Lambda execution role in its Trust Relationship.
+
+*** If team does not have a IAM role associated, the default role created within the stack will be used.
 
 Example:
 ```bash
@@ -78,11 +58,12 @@ Example:
   ]
 }
 ```
-preferred_channel: If manual approval is needed, where to contact the security admin (email or slack).
+
+- preferred_channel: If manual approval is needed, where to contact the security admin (email or slack).
 
 *** If preferred_channel is 'email' but there is no email defined for this team, we will send the notification for the e-mail passed on the DefaultSecurityAdminEmailID parameter.
 
-email: Security admin e-mail if preferred channel is 'email'. If this is defined on the team_preferences table, we also need to create a subscription on the SNS topic with the following subscription filter policy:
+- email: Security admin e-mail if preferred channel is 'email'. If this is defined on the team_preferences table, we also need to create a subscription on the SNS topic with the following subscription filter policy:
 ```bash
 {
   "channel": [
@@ -93,10 +74,10 @@ email: Security admin e-mail if preferred channel is 'email'. If this is defined
   ]
 }
 ```
-slack_webhook_url: Slack channel webhook URL if preferred channel is 'slack'.
+- slack_webhook_url: Slack channel webhook URL if preferred channel is 'slack'.
 
 
-#### - Use your own permission request evaluation code:
+#### Use your own permission request evaluation logic:
 
 Each company will have different rules to automatically approve a permission request. 
 
@@ -131,10 +112,16 @@ $ export user_pool_id=$(aws cloudformation describe-stacks --stack-name sts-brok
 $ export user_pool_client_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientID'].OutputValue" --output text --profile <PROFILE>)
 ```
 
+The policy request will have the following parameters:
+
+- inline_policy
+- policyARNs
+- tags
+
 We can write the policy request to a local file:
 
 ```bash
-$ echo '{ "Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"*"}] }' > policy.json
+$ echo '{"inline_policy":{"Version":"2012-10-17","Statement":[{"Sid":"Stmt2","Effect":"Allow","Action":"sqs:*","Resource":"*"}]},"policyARNs":["arn:aws:iam::aws:policy/AmazonS3FullAccess"],"tags":[{"Key":"customtag","Value":"custom value"}]}' > policy.json
 ```
 
 Now we can call the request permission API using 'cognitocurl' CLI tool:
@@ -146,9 +133,8 @@ $ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USE
 Once permissions are approved by security admin, we can retrieve it:
 
 ```bash
-$ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USER_POOL> --run "curl -X GET $api_url'credentials/get'"
+$ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USER_POOL> --run "curl -X GET $api_url'credentials'"
 ```
-
 
 ## Resources
 

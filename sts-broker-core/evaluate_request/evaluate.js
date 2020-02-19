@@ -4,12 +4,10 @@ const aws = require('aws-sdk');
 
 exports.lambdaHandler = async (event, context, callback) => {
 
-    // TODO: Sample business logic to decide whether this permission request should be automatically approved or not.
+    // Sample business logic to decide whether this permission request should be automatically approved or not.
 
-    console.log(event);
-
-    if (event.permission_request.team == "myteam") {
-        console.log("Manual approval needed");
+    if (event.permission_request.inline_policy || event.permission_request.policyARNs.length > 5) {
+        console.log("Manual approval required");
         var approved = false;
     } else {
         console.log("Permission request is approved");

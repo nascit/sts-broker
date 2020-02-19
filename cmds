@@ -8,9 +8,14 @@ export user_pool_id=$(aws cloudformation describe-stacks --stack-name sts-broker
 
 export user_pool_client_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientID'].OutputValue" --output text --profile stsbroker --region us-east-2)
 
-cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @policy.json"
+# Get available managed policies
+cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --hostedui hostedui.json --run "curl -X GET $api_url'policies'"
 
-cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --run "curl -X GET $api_url'credentials/get'"
+# Request permissions
+cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --hostedui hostedui.json --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @policy.json"
+
+# Retrieve temporary credentials
+cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --hostedui hostedui.json --run "curl -X GET $api_url'credentials'"
 
 # Confirm user
 aws cognito-idp admin-confirm-sign-up --user-pool-id $user_pool_id --username nascit@amazon.com --profile stsbroker --region us-east-2
@@ -20,3 +25,6 @@ aws cognito-idp admin-set-user-password --user-pool-id $user_pool_id --username 
 
 # Update User attribute
 aws cognito-idp admin-update-user-attributes --user-pool-id $user_pool_id --username nascit@amazon.com --user-attributes Name='custom:team',Value=myteam --profile stsbroker --region us-east-2
+
+# Global signout
+aws cognito-idp admin-user-global-sign-out --user-pool-id $user_pool_id --username AWSSSO_federated --profile stsbroker --region us-east-2

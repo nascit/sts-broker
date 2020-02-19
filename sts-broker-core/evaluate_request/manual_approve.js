@@ -6,7 +6,6 @@ const sns = new aws.SNS();
 function get_permissions (inline_policy) {
     var permissions = "";
     inline_policy.forEach(function(value){
-//      console.log(value);
       permissions += "=> Action: " + value.Action + "\n" +
       "     Resource: " + value.Resource + "\n";
     });
