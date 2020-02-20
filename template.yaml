@@ -10,7 +10,7 @@ Parameters:
       - Dev
       - Prod
     Type: String
-    Default: Dev
+    Default: Prod
     ConstraintDescription: Must specify Prod or Dev.
 
   EvaluatePermissionRequestCodeUriBucket:

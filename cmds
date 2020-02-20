@@ -1,12 +1,12 @@
-sam package --output-template-file packaged.yaml --s3-bucket sts-broker-dev --region us-east-2 --profile stsbroker
+sam package --output-template-file packaged.yaml --s3-bucket sts-broker --region us-east-1 --profile stsbroker
 
-sam deploy --template-file packaged.yaml --stack-name sts-broker --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --region us-east-2 --profile stsbroker
+sam deploy --template-file packaged.yaml --stack-name sts-broker --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --region us-east-1 --profile stsbroker
 
-export api_url=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='STSBrokerAPI'].OutputValue" --output text --profile stsbroker --region us-east-2)
+export api_url=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='STSBrokerAPI'].OutputValue" --output text --profile stsbroker --region us-east-1)
 
-export user_pool_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolID'].OutputValue" --output text --profile stsbroker --region us-east-2)
+export user_pool_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolID'].OutputValue" --output text --profile stsbroker --region us-east-1)
 
-export user_pool_client_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientID'].OutputValue" --output text --profile stsbroker --region us-east-2)
+export user_pool_client_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientID'].OutputValue" --output text --profile stsbroker --region us-east-1)
 
 # Get available managed policies
 cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --hostedui hostedui.json --run "curl -X GET $api_url'policies'"
@@ -18,13 +18,13 @@ cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --host
 cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --hostedui hostedui.json --run "curl -X GET $api_url'credentials'"
 
 # Confirm user
-aws cognito-idp admin-confirm-sign-up --user-pool-id $user_pool_id --username nascit@amazon.com --profile stsbroker --region us-east-2
+aws cognito-idp admin-confirm-sign-up --user-pool-id $user_pool_id --username nascit@amazon.com --profile stsbroker --region us-east-1
 
 # Change password
-aws cognito-idp admin-set-user-password --user-pool-id $user_pool_id --username nascit@amazon.com --password password --permanent --profile stsbroker --region us-east-2
+aws cognito-idp admin-set-user-password --user-pool-id $user_pool_id --username nascit@amazon.com --password password --permanent --profile stsbroker --region us-east-1
 
 # Update User attribute
-aws cognito-idp admin-update-user-attributes --user-pool-id $user_pool_id --username nascit@amazon.com --user-attributes Name='custom:team',Value=myteam --profile stsbroker --region us-east-2
+aws cognito-idp admin-update-user-attributes --user-pool-id $user_pool_id --username nascit@amazon.com --user-attributes Name='custom:team',Value=myteam --profile stsbroker --region us-east-1
 
 # Global signout
-aws cognito-idp admin-user-global-sign-out --user-pool-id $user_pool_id --username AWSSSO_federated --profile stsbroker --region us-east-2
+aws cognito-idp admin-user-global-sign-out --user-pool-id $user_pool_id --username AWSSSO_federated --profile stsbroker --region us-east-1
