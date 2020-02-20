@@ -121,13 +121,13 @@ The policy request will have the following parameters:
 We can write the policy request to a local file:
 
 ```bash
-$ echo '{"inline_policy":{"Version":"2012-10-17","Statement":[{"Sid":"Stmt2","Effect":"Allow","Action":"sqs:*","Resource":"*"}]},"policyARNs":["arn:aws:iam::aws:policy/AmazonS3FullAccess"],"tags":[{"Key":"customtag","Value":"custom value"}]}' > policy.json
+$ echo '{"inline_policy":{"Version":"2012-10-17","Statement":[{"Sid":"Stmt2","Effect":"Allow","Action":"sqs:*","Resource":"*"}]},"policyARNs":["arn:aws:iam::aws:policy/AmazonS3FullAccess"],"tags":[{"Key":"customtag","Value":"custom value"}]}' > permission_request.json
 ```
 
 Now we can call the request permission API using 'cognitocurl' CLI tool:
 
 ```bash
-$ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USER_POOL> --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @policy.json"
+$ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USER_POOL> --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @permission_request.json"
 ```
 
 Once permissions are approved by security admin, we can retrieve it:

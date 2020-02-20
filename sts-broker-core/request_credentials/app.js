@@ -23,14 +23,15 @@ exports.lambdaHandler = async (event, context, callback) => {
         return;
     }
 
-    if (!event.requestContext.authorizer) {
-        errorResponse('Authorization not configured.', context.awsRequestId, callback);
+    if (!event.requestContext.authorizer.claims['custom:team']) {
+        errorResponse('User does not belong to any team.', context.awsRequestId, callback);
         return;
     }
 
     var inline_policy = JSON.parse(event.body).inline_policy;
     var policyARNs = JSON.parse(event.body).policyARNs;
     var tags = JSON.parse(event.body).tags;
+    var sessionDuration = JSON.parse(event.body).sessionDuration
 
     // TODO: Validate inline policy.
 
@@ -61,6 +62,7 @@ exports.lambdaHandler = async (event, context, callback) => {
         inline_policy: inline_policy,
         policyARNs: policyARNs,
         tags: tags,
+        sessionDuration: sessionDuration,
         timestamp: new Date().getTime()
     }
 
@@ -80,14 +82,14 @@ exports.lambdaHandler = async (event, context, callback) => {
 };
 
 function errorResponse(errorMessage, awsRequestId, callback) {
-  callback(null, {
-    statusCode: 500,
-    body: JSON.stringify({
-      Error: errorMessage,
-      Reference: awsRequestId,
-    }),
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-    },
-  });
+    callback(null, {
+        statusCode: 500,
+        body: JSON.stringify({
+            Error: errorMessage,
+            Reference: awsRequestId,
+        }),
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+        },
+    });
 }

@@ -17,7 +17,7 @@
 
 * [X] Sample business logic to decide whether this permission request should be automatically approved or not. (sts-broker-core/evaluate_request/evaluate.js)
 
-* [ ] Session duration can also be a parameter (sts-broker-core/approve/app.js)
+* [X] Session duration can also be a parameter (sts-broker-core/approve/app.js)
 
 * [ ] Notify user the permission is already approved. (sts-broker-core/evaluate_request/validate.js)
 

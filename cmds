@@ -12,7 +12,7 @@ export user_pool_client_id=$(aws cloudformation describe-stacks --stack-name sts
 cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --hostedui hostedui.json --run "curl -X GET $api_url'policies'"
 
 # Request permissions
-cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --hostedui hostedui.json --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @policy.json"
+cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --hostedui hostedui.json --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @permission_request.json"
 
 # Retrieve temporary credentials
 cognitocurl --cognitoclient $user_pool_client_id --userpool $user_pool_id --hostedui hostedui.json --run "curl -X GET $api_url'credentials'"

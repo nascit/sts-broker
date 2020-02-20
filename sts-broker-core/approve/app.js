@@ -7,7 +7,7 @@ var lambda = new aws.Lambda();
 const dynamodb = require('aws-sdk/clients/dynamodb');
 const docClient = new dynamodb.DocumentClient();
 
-exports.lambdaHandler = async (event) => {
+exports.lambdaHandler = async (event, context, callback) => {
 
     // STEP 1 - Map the policy from the requests table to be passed on the assumeRole API call
 
@@ -20,6 +20,11 @@ exports.lambdaHandler = async (event) => {
     };
 
     var permission_request = await docClient.get(params).promise();
+
+    if (!permission_request.Item) {
+        errorResponse('This permission request could not be found!', context.awsRequestId, callback);
+        return;
+    }
 
     // Get inline policy requested (if passed)
 
@@ -85,7 +90,7 @@ exports.lambdaHandler = async (event) => {
     // STEP 3 - ASSUME ROLE
 
     var params = {
-        DurationSeconds: 3600, // TODO: Session duration can also be a parameter
+        DurationSeconds: permission_request.Item.sessionDuration, // Default value is one hour
         Policy: (statements.length == 0)? null: JSON.stringify(policy),
         PolicyArns: managed_policies,
         Tags: tags,
@@ -170,3 +175,16 @@ exports.lambdaHandler = async (event) => {
 
     return response;
 };
+
+function errorResponse(errorMessage, awsRequestId, callback) {
+    callback(null, {
+        statusCode: 500,
+        body: JSON.stringify({
+            Error: errorMessage,
+            Reference: awsRequestId,
+        }),
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+        },
+    });
+}
