@@ -1,6 +1,6 @@
 # sts-broker backlog
 
-* [ ] Get slack URL from TEAM_PREFERENCES_TABLE DynamoDB table (sts-broker/slack/app.js)
+* [X] Get slack URL from TEAM_PREFERENCES_TABLE DynamoDB table (sts-broker/slack/app.js)
 
 * [ ] Secure "ApproveRequest" API (sts-broker-core/template.yaml)
 

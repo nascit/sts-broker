@@ -42,6 +42,7 @@ Resources:
       Location: slack/template.yaml
       Parameters:
         ApprovalNotificationTopicARN: !GetAtt STSBrokerCore.Outputs.ApprovalNotificationTopicARN
+        TeamPreferencesTableName: !GetAtt STSBrokerCore.Outputs.TeamPreferencesTableName
 
 Outputs:
   STSBrokerAPI:

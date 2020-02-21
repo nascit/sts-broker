@@ -53,7 +53,10 @@ Example:
       "Principal": {
         "AWS": "<LAMBDA_EXECUTION_ROLE_ARN>"
       },
-      "Action": "sts:AssumeRole"
+      "Action": [
+          "sts:AssumeRole",
+          "sts:TagSession"
+      ]
     }
   ]
 }

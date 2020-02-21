@@ -6,6 +6,19 @@ Globals:
   Function:
     Timeout: 10
 
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: STSBroker
+    Description: This project can be used as a reference for a serverless custom Identity Broker architecture.
+    Author: Timoteo Nascimento
+    SpdxLicenseId: Apache-2.0
+    LicenseUrl: ../LICENSE
+    ReadmeUrl: ../README.md
+    Labels: ['lambda']
+    HomePageUrl: https://github.com/timothyBRZ/sts-broker
+    SemanticVersion: 0.0.1
+    SourceCodeUrl: https://github.com/timothyBRZ/sts-broker
+
 Parameters:
   CognitoUserPoolName:
     Type: String
@@ -555,3 +568,6 @@ Outputs:
   CognitoUserPoolClientID:
     Description: Cognito User Pool Client ID
     Value: !Ref CognitoUserPoolClient
+  TeamPreferencesTableName:
+    Description: Name of the DynamoDB Table storing the team info and role mapping.
+    Value: !Ref TeamPreferencesTableName
