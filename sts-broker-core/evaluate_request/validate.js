@@ -10,14 +10,14 @@ var stepFunctions = new aws.StepFunctions();
 var ItemShape = docClient.service.api.operations.getItem.output.members.Item;
 
 async function asyncForEach(array, callback) {
-  for (let index = 0; index < array.length; index++) {
-    await callback(array[index], index, array);
-  }
+    for (let index = 0; index < array.length; index++) {
+        await callback(array[index], index, array);
+    }
 }
 
-exports.lambdaHandler = async (event, context, callback) => {
+exports.lambdaHandler = async(event, context, callback) => {
 
-    await asyncForEach(event.Records, async (record) => {
+    await asyncForEach(event.Records, async(record) => {
         if (record.eventName == "INSERT") {
 
             var request = dynamodbTranslator.translateOutput(record.dynamodb.NewImage, ItemShape);
@@ -25,7 +25,8 @@ exports.lambdaHandler = async (event, context, callback) => {
             if (request.approved) {
                 console.log("Permission request is already approved. Sending notification to federated user...");
                 // TODO: Notify user the permission is already approved.
-            } else {
+            }
+            else {
                 console.log("Permission request still not approved.");
 
                 // Get user's team info
@@ -53,8 +54,7 @@ exports.lambdaHandler = async (event, context, callback) => {
                     stateMachineArn: process.env.EVALUATE_REQUEST_STATE_MACHINE,
                     input: JSON.stringify(state_machine_input)
                 };
-                var execution = await stepFunctions.startExecution(params).promise();
-                console.log(execution);
+                await stepFunctions.startExecution(params).promise();
             }
 
         }

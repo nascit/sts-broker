@@ -7,9 +7,9 @@ var lambda = new aws.Lambda();
 const dynamodb = require('aws-sdk/clients/dynamodb');
 const docClient = new dynamodb.DocumentClient();
 
-exports.lambdaHandler = async (event, context, callback) => {
+exports.lambdaHandler = async(event, context, callback) => {
 
-    // STEP 1 - Map the policy from the requests table to be passed on the assumeRole API call
+    // STEP 1 - Map the STS Broker policy from the permission requests table
 
     var params = {
         TableName: process.env.REQUESTS_TABLE,
@@ -19,37 +19,46 @@ exports.lambdaHandler = async (event, context, callback) => {
         }
     };
 
-    var permission_request = await docClient.get(params).promise();
+    var data = await docClient.get(params).promise();
+    const permission_request = data.Item;
+    const broker_policy = permission_request.policy;
 
-    if (!permission_request.Item) {
+    if (!permission_request) {
         errorResponse('This permission request could not be found!', context.awsRequestId, callback);
         return;
     }
 
+    var params = {
+        TableName: process.env.POLICIES_TABLE,
+        Key: { policy_id: broker_policy },
+    };
+    var data = await docClient.get(params).promise();
+    const policy = data.Item;
+
     // Get inline policy requested (if passed)
 
-    var statements = [];
-    if (permission_request.Item.inline_policy) {
-        permission_request.Item.inline_policy.forEach(function(value){
-            var statement = {
-                "Effect": "Allow",
-                "Action": value.Action,
-                "Resource": value.Resource
-            };
-            statements.push(statement);
-        });
-    }
-
-    const policy = {
-      "Version": "2012-10-17",
-      "Statement": statements
-    };
+    //    var statements = [];
+    //    if (permission_request.inline_policy) {
+    //        permission_request.inline_policy.forEach(function(value){
+    //            var statement = {
+    //                "Effect": "Allow",
+    //                "Action": value.Action,
+    //                "Resource": value.Resource
+    //            };
+    //            statements.push(statement);
+    //        });
+    //    }
+    //
+    //    const policy = {
+    //      "Version": "2012-10-17",
+    //      "Statement": statements
+    //    };
 
     // Get managed policies requested (if passed)
 
     var managed_policies = [];
-    if (permission_request.Item.policyARNs) {
-        permission_request.Item.policyARNs.forEach(function(policy_arn){
+    if (policy.managed_policies) {
+        policy.managed_policies.forEach(function(policy_arn) {
             var arn = {
                 arn: policy_arn
             };
@@ -59,39 +68,29 @@ exports.lambdaHandler = async (event, context, callback) => {
 
     // Get tags (if passed)
 
-    var tags = []
-    if (permission_request.Item.tags) {
-        permission_request.Item.tags.forEach(function(tag){
-            var tag = {
-                Key: tag["Key"],
-                Value: tag["Value"]
-            }
-            tags.push(tag);
+    var tags = [];
+    if (permission_request.tags && permission_request.tags.length != 0) {
+        permission_request.tags.forEach(function(tag) {
+            var session_tag = {
+                Key: Object.keys(tag)[0],
+                Value: tag[Object.keys(tag)[0]]
+            };
+            tags.push(session_tag);
         });
     }
 
-    // STEP 2 - Get role association based on user info from 'team_preferences' table
+    // STEP 2 - Get IAM role to be assumed
 
-    var team = permission_request.Item.team;
-
-    var params = {
-        TableName: process.env.TEAM_PREFERENCES_TABLE,
-        Key: {
-            team_id: team
-        }
-    };
-
-    var team_info = await docClient.get(params).promise();
-
-    // If team does not have a IAM role associated, use DEFAULT_ASSUMED_ROLE
-
-    var role_assumed = (!team_info.Item.role)? process.env.DEFAULT_ASSUMED_ROLE: team_info.Item.role;
+    if (!policy.base_role) {
+        errorResponse('This policy does not have a base role!', context.awsRequestId, callback);
+    }
+    var role_assumed = policy.base_role;
 
     // STEP 3 - ASSUME ROLE
 
     var params = {
-        DurationSeconds: permission_request.Item.sessionDuration, // Default value is one hour
-        Policy: (statements.length == 0)? null: JSON.stringify(policy),
+        DurationSeconds: permission_request.sessionDuration,
+        //        Policy: (statements.length == 0)? null: JSON.stringify(policy),
         PolicyArns: managed_policies,
         Tags: tags,
         RoleArn: role_assumed,
@@ -119,9 +118,9 @@ exports.lambdaHandler = async (event, context, callback) => {
     // STEP 4 - Stores temporary credentials on TEMP_CREDENTIALS_TABLE table
 
     var params = {
-        TableName : process.env.TEMP_CREDENTIALS_TABLE,
+        TableName: process.env.TEMP_CREDENTIALS_TABLE,
         Item: {
-            userid : event.queryStringParameters.userid,
+            userid: event.queryStringParameters.userid,
             credentials: creds.Credentials,
             expiration: new Date(creds.Credentials.Expiration).getTime() / 1000,
             signin_url: resultObject.request_url
@@ -141,8 +140,8 @@ exports.lambdaHandler = async (event, context, callback) => {
             userid: event.queryStringParameters.userid,
         },
         ExpressionAttributeValues: {
-          ':approved': true,
-          ':updatedAt': timestamp,
+            ':approved': true,
+            ':updatedAt': timestamp,
         },
         UpdateExpression: 'SET approved = :approved, updatedAt = :updatedAt',
         ReturnValues: 'ALL_NEW',
