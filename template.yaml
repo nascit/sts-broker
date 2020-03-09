@@ -54,3 +54,6 @@ Outputs:
   CognitoUserPoolClientID:
     Description: Cognito User Pool client
     Value: !GetAtt STSBrokerCore.Outputs.CognitoUserPoolClientID
+  ApproveRequestFunctionARN:
+    Description: ARN of the approval function. Must be included on the Assumed Role trust relationship.
+    Value: !GetAtt STSBrokerCore.Outputs.ApproveRequestFunctionARN

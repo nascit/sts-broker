@@ -358,10 +358,6 @@ Resources:
         - Arn
       Environment:
         Variables:
-          DEFAULT_ASSUMED_ROLE:
-            Fn::GetAtt:
-            - AssumedRole
-            - Arn
           TEAM_PREFERENCES_TABLE:
             Ref: TeamPreferencesTableName
           REQUESTS_TABLE:
@@ -462,28 +458,6 @@ Resources:
               - sts:AssumeRole
               - sts:TagSession
             Resource: "*"
-
-  # For simplicity, a default role to be assumed is created within the stack,
-  # Ideally role to be assumed should already be created and mapped on TeamPreferencesTableName
-  # This role will only be assumed when the team does not have any mapping IAM role
-  AssumedRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS:
-                - !GetAtt LambdaExecutionRole.Arn
-            Action:
-              - sts:AssumeRole
-              - sts:TagSession
-      RoleName: !Sub "DefaultAssumedRole-${AWS::Region}"
-      ManagedPolicyArns: # TODO: Managed policies for Default Role should be parameters
-        - arn:aws:iam::aws:policy/AmazonS3FullAccess
-        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
-        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
 
   RequestCredentialsRecords:
     Type: 'AWS::DynamoDB::Table'
@@ -637,9 +611,9 @@ Resources:
           ManualApprovePermissionRequestFunction: !GetAtt ManualApprovePermissionRequestFunction.Arn
 
 Outputs:
-  AssumedRoleARN:
-    Description: Default assumed Role ARN
-    Value: !GetAtt AssumedRole.Arn
+  ApproveRequestFunctionARN:
+    Description: ARN of the approval function. Must be included on the Assumed Role trust relationship.
+    Value: !GetAtt ApproveRequestFunction.Arn
   ApprovalNotificationTopicName:
     Description: Name of the approval SNS topic
     Value: !GetAtt ApprovalNotificationTopic.TopicName

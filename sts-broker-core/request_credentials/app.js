@@ -51,12 +51,12 @@ exports.lambdaHandler = async(event, context, callback) => {
     };
     const data = await docClient.get(params).promise();
     const user_tags = data.Item.user_tags;
-
+    const default_tags = data.Item.default_tags;
+        
     var tags = [];
 
     if (user_tags && user_tags.length != 0) {
         user_tags.forEach(function(tag_name) {
-            console.log(tag_name);
             var custom_tag = 'custom:' + tag_name;
             var tag = {};
             if (event.requestContext.authorizer.claims[custom_tag]) {
@@ -68,6 +68,12 @@ exports.lambdaHandler = async(event, context, callback) => {
             else {
                 errorResponse("This user does not have the attribute '" + tag + "' which is required to use this policy.", context.awsRequestId, callback);
             }
+            tags.push(tag);
+        });
+    }
+    
+    if (default_tags && default_tags.length != 0) {
+        default_tags.forEach(function(tag) {
             tags.push(tag);
         });
     }
