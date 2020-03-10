@@ -47,4 +47,6 @@ Icon
 ._*
 
 permission_request.json
-
+hostedui.json
+stsbroker
+cmds

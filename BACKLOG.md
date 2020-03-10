@@ -23,8 +23,6 @@
 
 * [ ] Validate inline policy.
 
-* [ ] Validate tags.
-
 * [X] User can also pass up to 10 managed policy ARNs. (sts-broker-core/request_credentials/app.js)
 
 * [X] User can pass tags (sts-broker-core/request_credentials/app.js)

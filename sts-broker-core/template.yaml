@@ -14,10 +14,10 @@ Metadata:
     SpdxLicenseId: Apache-2.0
     LicenseUrl: ../LICENSE
     ReadmeUrl: ../README.md
-    Labels: ['lambda']
-    HomePageUrl: https://github.com/timothyBRZ/sts-broker
+    Labels: ['lambda', 'iam', 'sts', 'identity', 'broker']
+    HomePageUrl: https://github.com/nascit/sts-broker
     SemanticVersion: 0.0.1
-    SourceCodeUrl: https://github.com/timothyBRZ/sts-broker
+    SourceCodeUrl: https://github.com/nascit/sts-broker
 
 Parameters:
   CognitoUserPoolName:
@@ -45,7 +45,6 @@ Parameters:
   DefaultSecurityAdminEmailID:
     AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
     ConstraintDescription: This is not a valid email id
-    Default: timoteo.asn@gmail.com
     Description: Enter Approver Email ID
     MaxLength: '64'
     MinLength: '1'
@@ -53,8 +52,8 @@ Parameters:
   Stage:
     Description: Stage name (Dev, Prod)
     AllowedValues:
-    - Dev
-    - Prod
+      - Dev
+      - Prod
     Type: String
     Default: Dev
     ConstraintDescription: Must specify Prod or Dev
@@ -63,14 +62,14 @@ Parameters:
     Description: The "EvaluatePermissionRequest" Lambda Function Runtime
     Default: nodejs12.x
     AllowedValues:
-    - dotnetcore2.1
-    - go1.x
-    - nodejs12.x
-    - java11
-    - java8
-    - python3.7
-    - pythin3.8
-    - ruby2.7
+      - dotnetcore2.1
+      - go1.x
+      - nodejs12.x
+      - java11
+      - java8
+      - python3.7
+      - pythin3.8
+      - ruby2.7
   EvaluatePermissionRequestCodeUriBucket:
     Description: S3 Uri location for the "EvaluatePermissionRequest" Lambda deployment
       package (S3 Bucket)
@@ -89,7 +88,6 @@ Conditions:
   NotHasEvaluatePermissionRequestCodeUri: !Or [ !Equals [!Ref EvaluatePermissionRequestCodeUriBucket, ''], !Equals [!Ref EvaluatePermissionRequestCodeUriKey, ''] ]
 
 Resources:
-
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -153,8 +151,8 @@ Resources:
       Runtime: nodejs12.x
       Role:
         Fn::GetAtt:
-        - LambdaExecutionRole
-        - Arn
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
           TEAM_PREFERENCES_TABLE:
@@ -179,8 +177,8 @@ Resources:
       Runtime: nodejs12.x
       Role:
         Fn::GetAtt:
-        - LambdaExecutionRole
-        - Arn
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
           REQUESTS_TABLE:
@@ -233,8 +231,8 @@ Resources:
       Runtime: nodejs12.x
       Role:
         Fn::GetAtt:
-        - ValidatePermissionRequestExecutionRole
-        - Arn
+          - ValidatePermissionRequestExecutionRole
+          - Arn
       Environment:
         Variables:
           APPROVAL_URL:
@@ -251,8 +249,8 @@ Resources:
           Properties:
             Stream:
               Fn::GetAtt:
-              - RequestCredentialsRecords
-              - StreamArn
+                - RequestCredentialsRecords
+                - StreamArn
             StartingPosition: TRIM_HORIZON
             MaximumRetryAttempts: 5
             BatchSize: 5
@@ -271,8 +269,8 @@ Resources:
         Ref: EvaluateLambdaRuntime
       Role:
         Fn::GetAtt:
-        - LambdaExecutionRole
-        - Arn
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
           TEAM_PREFERENCES_TABLE:
@@ -291,8 +289,8 @@ Resources:
       Runtime: nodejs12.x
       Role:
         Fn::GetAtt:
-        - LambdaExecutionRole
-        - Arn
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
           TEAM_PREFERENCES_TABLE:
@@ -310,8 +308,8 @@ Resources:
       Runtime: nodejs12.x
       Role:
         Fn::GetAtt:
-        - LambdaExecutionRole
-        - Arn
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
           TEAM_PREFERENCES_TABLE:
@@ -331,8 +329,8 @@ Resources:
       Runtime: nodejs12.x
       Role:
         Fn::GetAtt:
-        - LambdaExecutionRole
-        - Arn
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
           APPROVAL_SNS_TOPIC:
@@ -354,8 +352,8 @@ Resources:
       Runtime: nodejs12.x
       Role:
         Fn::GetAtt:
-        - LambdaExecutionRole
-        - Arn
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
           TEAM_PREFERENCES_TABLE:
@@ -379,7 +377,7 @@ Resources:
             Auth:
               Authorizer: NONE
             RequestParameters:
-            - method.request.querystring.requestid
+              - method.request.querystring.requestid
 
   ConstructLoginURLFunction:
     Type: AWS::Serverless::Function
@@ -451,8 +449,7 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          -
-            Sid: AllowAssumeRole
+          - Sid: AllowAssumeRole
             Effect: Allow
             Action:
               - sts:AssumeRole
@@ -612,8 +609,11 @@ Resources:
 
 Outputs:
   ApproveRequestFunctionARN:
-    Description: ARN of the approval function. Must be included on the Assumed Role trust relationship.
+    Description: ARN of the approval function.
     Value: !GetAtt ApproveRequestFunction.Arn
+  ApproveRequestFunctionRoleARN:
+    Description: IAM Role ARN of the approval function. Must be included on the Assumed Role trust relationship.
+    Value: !GetAtt LambdaExecutionRole.Arn
   ApprovalNotificationTopicName:
     Description: Name of the approval SNS topic
     Value: !GetAtt ApprovalNotificationTopic.TopicName
