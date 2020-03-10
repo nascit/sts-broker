@@ -39,7 +39,7 @@ Resources:
   NotifySlack:
     Type: AWS::Serverless::Application
     Properties:
-      Location: slack/template.yaml
+      Location: slack/packaged.yaml
       Parameters:
         ApprovalNotificationTopicARN: !GetAtt STSBrokerCore.Outputs.ApprovalNotificationTopicARN
         TeamPreferencesTableName: !GetAtt STSBrokerCore.Outputs.TeamPreferencesTableName
