@@ -8,13 +8,14 @@ This project can be used as a reference for a serverless custom Identity Broker 
     - Record every permission request made (traceability).
     - Least privilege access: Avoid sharing same permissions among federated users.
     - Implement a strong identity foundation.
-    - More details on this Re:Invent session: 
+    - More details on this Re:Invent session:
+    
     [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/vbjFjMNVEpc/0.jpg)](https://www.youtube.com/watch?v=vbjFjMNVEpc&t=420s)
     
 
 ## Architecture
 
-![STS Broker Architecture](https://github.com/nascit/sts-broker/raw/master/STSBroker.png "STS Broker architecture")
+![STS Broker Architecture](https://github.com/nascit/sts-broker/blob/dev/STSBroker.png "STS Broker architecture")
 
 ## Deploy the sample application
 
