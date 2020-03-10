@@ -3,19 +3,26 @@
 This project can be used as a reference for a serverless custom Identity Broker architecture.
 
 - Why would you need a Identity Broker?
-    - Limit of how many IAM roles/users an AWS account can have.
     - Flexibility to manage permissions used among IAM roles/users.
+    - Limit of how many IAM roles/users an AWS account can have.
     - Record every permission request made (traceability).
     - Least privilege access: Avoid sharing same permissions among federated users.
     - Implement a strong identity foundation.
-
+    - More details on this Re:Invent session: 
+    [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/vbjFjMNVEpc/0.jpg)](https://www.youtube.com/watch?v=vbjFjMNVEpc&t=420s)
+    
 
 ## Architecture
 
-![STS Broker Architecture](https://github.com/timothyBRZ/sts-broker/raw/master/AWS%20STS%20broker.png "STS Broker architecture")
+![STS Broker Architecture](https://github.com/nascit/sts-broker/raw/master/AWS%20STS%20broker.png "STS Broker architecture")
 
 ## Deploy the sample application
 
+For each nested SAM application, use 'sam build' to build your Lambda source code and generate deployment artifacts that target Lambda's execution environment.
+
+```bash
+$ sam build
+```
 
 To prepare the application for deployment, use the `sam package` command.
 
@@ -33,51 +40,103 @@ $ sam deploy --template-file packaged.yaml --stack-name sts-broker --capabilitie
 
 ## Customize your Identity Broker
 
-#### Populate team preferences table:
+### Populate team preferences table:
 
 Your 'team_preferences' table must have the following attributes:
 
 - team_id (Partition Key):  A unique ID for the team the federated user belongs to. This must be available on the user ID token. User Pool has a custom attribute named 'team'.
 
-- role: The IAM Role members of this team will be able to assume. This role must include Lambda execution role in its Trust Relationship.
-
-*** If team does not have a IAM role associated, the default role created within the stack will be used.
-
-Example:
-```bash
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "<LAMBDA_EXECUTION_ROLE_ARN>"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-```
-
 - preferred_channel: If manual approval is needed, where to contact the security admin (email or slack).
 
-*** If preferred_channel is 'email' but there is no email defined for this team, we will send the notification for the e-mail passed on the DefaultSecurityAdminEmailID parameter.
+    - If preferred_channel is 'email' but there is no email defined for this team, we will send the notification for the e-mail passed on the DefaultSecurityAdminEmailID parameter.
 
 - email: Security admin e-mail if preferred channel is 'email'. If this is defined on the team_preferences table, we also need to create a subscription on the SNS topic with the following subscription filter policy:
-```bash
-{
-  "channel": [
-    "email"
-  ],
-  "team": [
-    "<TEAM_ID>"
-  ]
-}
-```
+
+    ```bash
+    {
+      "channel": [
+        "email"
+      ],
+      "team": [
+        "<TEAM_ID>"
+      ]
+    }
+    ```
+  
 - slack_webhook_url: Slack channel webhook URL if preferred channel is 'slack'.
 
+- policies: List of STS Broker policies defined on the policies table.
 
-#### Use your own permission request evaluation logic:
+### Populate 'policies' table:
+     
+Your 'policies' table must have the following attributes:
+
+policy_id (Partition key): A unique ID to uniquely identity this STS Broker policy.
+
+base_role: The IAM Role members of this team will be able to assume. This role must include Lambda execution role in its Trust Relationship.
+
+  - Example:
+    ```bash
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+             {
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": "<LAMBDA_EXECUTION_ROLE_ARN>"
+                },
+                "Action": [
+                   "sts:AssumeRole",
+                   "sts:TagSession"
+                ]
+             }
+        ]
+    }
+    ```
+
+    - Lambda function execution role can be retrieved with the following command:
+
+    ```bash
+    aws cloudformation describe-stacks --stack-name <CFN_STACK_NAME> --query "Stacks[0].Outputs[?OutputKey=='ApproveRequestFunctionRoleARN'].OutputValue" --output text --region AWS_REGION --profile <PROFILE>)
+    ```
+
+
+account: AWS account number related to this policy.
+
+default_tags: List of key-value pair for pre defined tags. When using this policy, these tags will always be passed to the AssumeRole API.
+
+user_tags: Tags we need to retrieve from user claims. Eg.: "admin" tag should be false if it's a normal user.
+
+description: Brief STS Broker policy description.
+
+managed_policies: List of IAM managed policies to be passed on the AssumeRole API. (up to 10 managed policies)
+
+* **Example of a STS Broker policy:** 
+
+    ```bash
+    {
+      "account": "XXXXXXXXX",
+      "base_role": "arn:aws:iam::XXXXXXX:role/DefaultAssumedRole",
+      "default_tags": [
+        {
+          "environment": "development"
+        },
+        {
+          "region": "us-east-2"
+        }
+      ],
+      "description": "This policy will give access to MyApp development environment.",
+      "managed_policies": [
+        "arn:aws:iam::XXXXXXXXXX:policy/MyCustomManagedPolicy"
+      ],
+      "policy_id": "MyApp dev",
+      "user_tags": [
+        "admin"
+      ]
+    }
+    ```
+
+### Use your own permission request evaluation logic:
 
 Each company will have different rules to automatically approve a permission request. 
 
@@ -95,39 +154,36 @@ const response = {
 return response;
 ```
 
-If you do not provide your custom permission request evaluation code, a default one will be used.
+If you do not provide your custom permission request evaluation code, a default one (which relies on STS Broker policy risk value) will be used.
 
 ## Invoke STS Broker
+
+Ideally you should use [STS Broker CLI](https://www.npmjs.com/package/stsbroker "STS Broker CLI") to interact with your custom identity broker.
+
+You also have the option to make direct requests.
 
 We first need to get the API URL created:
 
 ```bash
-$ export api_url=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='STSBrokerAPI'].OutputValue" --output text --profile <PROFILE>)
+$ export api_url=$(aws cloudformation describe-stacks --stack-name <CFN_STACK_NAME> --query "Stacks[0].Outputs[?OutputKey=='STSBrokerAPI'].OutputValue" --output text --region AWS_REGION --profile <PROFILE>)
 ```
 
 And the Cognito UserPool ID/ Client App ID:
 
 ```bash
-$ export user_pool_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolID'].OutputValue" --output text --profile <PROFILE>)
-$ export user_pool_client_id=$(aws cloudformation describe-stacks --stack-name sts-broker --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientID'].OutputValue" --output text --profile <PROFILE>)
+$ export user_pool_id=$(aws cloudformation describe-stacks --stack-name <CFN_STACK_NAME> --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolID'].OutputValue" --output text --region AWS_REGION --profile <PROFILE>)
+$ export user_pool_client_id=$(aws cloudformation describe-stacks --stack-name <CFN_STACK_NAME> --query "Stacks[0].Outputs[?OutputKey=='CognitoUserPoolClientID'].OutputValue" --output text --region AWS_REGION --profile <PROFILE>)
 ```
 
-The policy request will have the following parameters:
+The policy request will have the following parameters on the request body:
 
-- inline_policy
-- policyARNs
-- tags
-
-We can write the policy request to a local file:
-
-```bash
-$ echo '{"inline_policy":{"Version":"2012-10-17","Statement":[{"Sid":"Stmt2","Effect":"Allow","Action":"sqs:*","Resource":"*"}]},"policyARNs":["arn:aws:iam::aws:policy/AmazonS3FullAccess"],"tags":[{"Key":"customtag","Value":"custom value"}]}' > policy.json
-```
+- policy
+- sessionDuration
 
 Now we can call the request permission API using 'cognitocurl' CLI tool:
 
 ```bash
-$ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USER_POOL> --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data @policy.json"
+$ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USER_POOL> --run "curl -X POST $api_url'credentials/request' -H 'content-type: application/json' --data <request_body>"
 ```
 
 Once permissions are approved by security admin, we can retrieve it:

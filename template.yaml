@@ -39,9 +39,10 @@ Resources:
   NotifySlack:
     Type: AWS::Serverless::Application
     Properties:
-      Location: slack/template.yaml
+      Location: slack/packaged.yaml
       Parameters:
         ApprovalNotificationTopicARN: !GetAtt STSBrokerCore.Outputs.ApprovalNotificationTopicARN
+        TeamPreferencesTableName: !GetAtt STSBrokerCore.Outputs.TeamPreferencesTableName
 
 Outputs:
   STSBrokerAPI:
@@ -53,3 +54,6 @@ Outputs:
   CognitoUserPoolClientID:
     Description: Cognito User Pool client
     Value: !GetAtt STSBrokerCore.Outputs.CognitoUserPoolClientID
+  ApproveRequestFunctionRoleARN:
+    Description: ARN of the approval function. Must be included on the Assumed Role trust relationship.
+    Value: !GetAtt STSBrokerCore.Outputs.ApproveRequestFunctionRoleARN

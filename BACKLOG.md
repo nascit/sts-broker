@@ -1,6 +1,6 @@
 # sts-broker backlog
 
-* [ ] Get slack URL from TEAM_PREFERENCES_TABLE DynamoDB table (sts-broker/slack/app.js)
+* [X] Get slack URL from TEAM_PREFERENCES_TABLE DynamoDB table (sts-broker/slack/app.js)
 
 * [ ] Secure "ApproveRequest" API (sts-broker-core/template.yaml)
 
@@ -17,13 +17,11 @@
 
 * [X] Sample business logic to decide whether this permission request should be automatically approved or not. (sts-broker-core/evaluate_request/evaluate.js)
 
-* [ ] Session duration can also be a parameter (sts-broker-core/approve/app.js)
+* [X] Session duration can also be a parameter (sts-broker-core/approve/app.js)
 
 * [ ] Notify user the permission is already approved. (sts-broker-core/evaluate_request/validate.js)
 
 * [ ] Validate inline policy.
-
-* [ ] Validate tags.
 
 * [X] User can also pass up to 10 managed policy ARNs. (sts-broker-core/request_credentials/app.js)
 

@@ -46,5 +46,7 @@ Icon
 # Thumbnails
 ._*
 
-policy.json
-
+permission_request.json
+hostedui.json
+stsbroker
+cmds

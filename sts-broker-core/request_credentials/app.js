@@ -9,85 +9,111 @@ function removeEmptyStringElements(obj) {
     for (var prop in obj) {
         if (typeof obj[prop] === 'object') {
             removeEmptyStringElements(obj[prop]);
-        } else if(obj[prop] === '') {
+        }
+        else if (obj[prop] === '') {
             delete obj[prop];
         }
     }
     return obj;
 }
 
-exports.lambdaHandler = async (event, context, callback) => {
+exports.lambdaHandler = async(event, context, callback) => {
 
     if (!event.body) {
         errorResponse('No permissions requested. You need to pass either a inline policy or a list of managed policies.', context.awsRequestId, callback);
         return;
     }
 
-    if (!event.requestContext.authorizer) {
-        errorResponse('Authorization not configured.', context.awsRequestId, callback);
+    if (!event.requestContext.authorizer.claims['custom:team']) {
+        errorResponse('User does not belong to any team.', context.awsRequestId, callback);
         return;
     }
 
     var inline_policy = JSON.parse(event.body).inline_policy;
-    var policyARNs = JSON.parse(event.body).policyARNs;
-    var tags = JSON.parse(event.body).tags;
+    var broker_policy = JSON.parse(event.body).policy;
+    var sessionDuration = JSON.parse(event.body).sessionDuration;
 
-    // TODO: Validate inline policy.
+    // TODO: Validate inline policy if not empty.
 
-    if (policyARNs.length > 10) {
-        errorResponse('You cannot pass more than 10 managed policies.', context.awsRequestId, callback);
-        return;
-    }
-
-    // TODO: Check if passed managed policies belong to the team allowed policies.
+    // TODO: Check if passed STS broker policy belong to the team allowed policies.
 
     var userid = event.requestContext.authorizer.claims.sub;
-    var inline_policy = (!inline_policy)? "": inline_policy["Statement"];
+    inline_policy = (!inline_policy) ? "" : inline_policy["Statement"];
 
-    console.log("User has requested the following policies: ");
-    console.log(inline_policy);
-    console.log(policyARNs);
+    console.log("User has requested the following policy: ");
+    console.log(broker_policy);
 
-    // TODO: Validate tags
+    // Validate tags: Check if user has the attributes requited on user_tags
 
-    console.log("Tags passed:");
-    console.log(tags);
+    var params = {
+        TableName: process.env.POLICIES_TABLE,
+        Key: { policy_id: broker_policy },
+    };
+    const data = await docClient.get(params).promise();
+    const user_tags = data.Item.user_tags;
+    const default_tags = data.Item.default_tags;
+        
+    var tags = [];
+
+    if (user_tags && user_tags.length != 0) {
+        user_tags.forEach(function(tag_name) {
+            var custom_tag = 'custom:' + tag_name;
+            var tag = {};
+            if (event.requestContext.authorizer.claims[custom_tag]) {
+                tag[tag_name] = event.requestContext.authorizer.claims[custom_tag];
+            }
+            else if (event.requestContext.authorizer.claims.tag) {
+                tag[tag_name] = event.requestContext.authorizer.claims.tag;
+            }
+            else {
+                errorResponse("This user does not have the attribute '" + tag + "' which is required to use this policy.", context.awsRequestId, callback);
+            }
+            tags.push(tag);
+        });
+    }
+    
+    if (default_tags && default_tags.length != 0) {
+        default_tags.forEach(function(tag) {
+            tags.push(tag);
+        });
+    }
 
     var item = {
         requestid: uuid.v1(),
         userid: userid,
-        email: event.requestContext.authorizer.claims.email,  // Retrieve user info from JWT token
+        email: event.requestContext.authorizer.claims.email,
         team: event.requestContext.authorizer.claims['custom:team'],
         inline_policy: inline_policy,
-        policyARNs: policyARNs,
+        policy: broker_policy,
         tags: tags,
+        sessionDuration: sessionDuration,
         timestamp: new Date().getTime()
-    }
+    };
 
     var params = {
         TableName: process.env.REQUESTS_TABLE,
         Item: removeEmptyStringElements(item),
     };
 
-    const result = await docClient.put(params).promise();
+    await docClient.put(params).promise();
 
     const response = {
         statusCode: 200,
-        body: "Permission request made by user '" + userid + "'. Please allow some time until the security admin evaluates it.\n"
+        body: "Permission request made by user '" + userid + "' (" + event.requestContext.authorizer.claims.email + ") . Please allow some time until the security admin evaluates it.\n"
     };
 
     return response;
 };
 
 function errorResponse(errorMessage, awsRequestId, callback) {
-  callback(null, {
-    statusCode: 500,
-    body: JSON.stringify({
-      Error: errorMessage,
-      Reference: awsRequestId,
-    }),
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-    },
-  });
+    callback(null, {
+        statusCode: 500,
+        body: JSON.stringify({
+            Error: errorMessage,
+            Reference: awsRequestId,
+        }),
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+        },
+    });
 }

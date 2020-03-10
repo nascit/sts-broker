@@ -6,6 +6,19 @@ Globals:
   Function:
     Timeout: 10
 
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: STSBroker
+    Description: This project can be used as a reference for a serverless custom Identity Broker architecture.
+    Author: Timoteo Nascimento
+    SpdxLicenseId: Apache-2.0
+    LicenseUrl: ../LICENSE
+    ReadmeUrl: ../README.md
+    Labels: ['lambda', 'iam', 'sts', 'identity', 'broker']
+    HomePageUrl: https://github.com/nascit/sts-broker
+    SemanticVersion: 0.0.1
+    SourceCodeUrl: https://github.com/nascit/sts-broker
+
 Parameters:
   CognitoUserPoolName:
     Type: String
@@ -18,17 +31,20 @@ Parameters:
     Type: String
     Default: permission_requests
   TeamPreferencesTableName:
-    Description: Name of the DynamoDB Table storing the team info and role mapping.
+    Description: Name of the DynamoDB Table storing the team info/preferences
     Type: String
     Default: team_preferences
+  PoliciesTableName:
+    Description: Name of the DynamoDB Table storing STS Broker policies
+    Type: String
+    Default: policies
   TempCredentialsTableName:
     Description: Name of the DynamoDB Table storing the temporary credentials
     Type: String
     Default: temp_credentials
   DefaultSecurityAdminEmailID:
     AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
-    ConstraintDescription: This is not a valid email id.
-    Default: timoteo.asn@gmail.com
+    ConstraintDescription: This is not a valid email id
     Description: Enter Approver Email ID
     MaxLength: '64'
     MinLength: '1'
@@ -39,16 +55,31 @@ Parameters:
       - Dev
       - Prod
     Type: String
-    Default: Prod
-    ConstraintDescription: Must specify Prod or Dev.
+    Default: Dev
+    ConstraintDescription: Must specify Prod or Dev
+  EvaluateLambdaRuntime:
+    Type: String
+    Description: The "EvaluatePermissionRequest" Lambda Function Runtime
+    Default: nodejs12.x
+    AllowedValues:
+      - dotnetcore2.1
+      - go1.x
+      - nodejs12.x
+      - java11
+      - java8
+      - python3.7
+      - pythin3.8
+      - ruby2.7
   EvaluatePermissionRequestCodeUriBucket:
-    Description: S3 Uri location for Lambda deployment package (S3 Bucket).
+    Description: S3 Uri location for the "EvaluatePermissionRequest" Lambda deployment
+      package (S3 Bucket)
     Type: String
     Default: ''
   EvaluatePermissionRequestCodeUriKey:
-    AllowedPattern: '^$|.*(zip)'
+    AllowedPattern: ^$|.*(zip)
     ConstraintDescription: This must be a .zip file.
-    Description: S3 Uri location for Lambda deployment package (S3 Bucket key).
+    Description: S3 Uri location for the "EvaluatePermissionRequest" Lambda deployment
+      package (S3 Bucket key)
     Type: String
     Default: ''
 
@@ -57,7 +88,6 @@ Conditions:
   NotHasEvaluatePermissionRequestCodeUri: !Or [ !Equals [!Ref EvaluatePermissionRequestCodeUriBucket, ''], !Equals [!Ref EvaluatePermissionRequestCodeUriKey, ''] ]
 
 Resources:
-
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -116,18 +146,25 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: get_policies/
-      Description: Get the policy ARNs for a specific team.
+      Description: Get the policy ARNs for a specific team
       Handler: app.lambdaHandler
       Runtime: nodejs12.x
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role:
+        Fn::GetAtt:
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
-          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
+          TEAM_PREFERENCES_TABLE:
+            Ref: TeamPreferencesTableName
+          POLICIES_TABLE:
+            Ref: PoliciesTableName
       Events:
         API:
           Type: Api
           Properties:
-            RestApiId: !Ref STSBrokerAPI
+            RestApiId:
+              Ref: STSBrokerAPI
             Path: /policies
             Method: GET
 
@@ -135,18 +172,25 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: request_credentials/
-      Description: Store permissions requests on DynamoDB Table.
+      Description: Store permissions requests on DynamoDB Table
       Handler: app.lambdaHandler
       Runtime: nodejs12.x
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role:
+        Fn::GetAtt:
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
-          REQUESTS_TABLE: !Ref RequestTableName
+          REQUESTS_TABLE:
+            Ref: RequestTableName
+          POLICIES_TABLE:
+            Ref: PoliciesTableName
       Events:
         API:
           Type: Api
           Properties:
-            RestApiId: !Ref STSBrokerAPI
+            RestApiId:
+              Ref: STSBrokerAPI
             Path: /credentials/request
             Method: POST
 
@@ -180,21 +224,31 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: evaluate_request/
-      Description: This function will listen to updates on permission request table, validate it and send to the 'EvaluatePermissionRequest' state machine. If request was approved, it will notify the end-user.
+      Description: This function will listen to updates on permission request table,
+        validate it and send to the 'EvaluatePermissionRequest' state machine. If
+        request was approved, it will notify the end-user
       Handler: validate.lambdaHandler
       Runtime: nodejs12.x
-      Role: !GetAtt ValidatePermissionRequestExecutionRole.Arn
+      Role:
+        Fn::GetAtt:
+          - ValidatePermissionRequestExecutionRole
+          - Arn
       Environment:
         Variables:
-          APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
-          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
-          EVALUATE_REQUEST_STATE_MACHINE: !Ref EvaluatePermissionRequestStateMachine
+          APPROVAL_URL:
+            Fn::Sub: https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
+          TEAM_PREFERENCES_TABLE:
+            Ref: TeamPreferencesTableName
+          EVALUATE_REQUEST_STATE_MACHINE:
+            Ref: EvaluatePermissionRequestStateMachine
+          POLICIES_TABLE:
+            Ref: PoliciesTableName
       Events:
         DynamoDB:
           Type: DynamoDB
           Properties:
             Stream:
-              'Fn::GetAtt':
+              Fn::GetAtt:
                 - RequestCredentialsRecords
                 - StreamArn
             StartingPosition: TRIM_HORIZON
@@ -208,78 +262,120 @@ Resources:
       CodeUri:
         Bucket: !Ref EvaluatePermissionRequestCodeUriBucket
         Key: !Ref EvaluatePermissionRequestCodeUriKey
-      Description: This function will contain your own custom business logic to decide whether this permission request should be automatically approved or not.
+      Description: This function will contain your own custom business logic to decide
+        whether this permission request should be automatically approved or not
       Handler: evaluate.lambdaHandler
-      Runtime: nodejs12.x
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime:
+        Ref: EvaluateLambdaRuntime
+      Role:
+        Fn::GetAtt:
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
-          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
+          TEAM_PREFERENCES_TABLE:
+            Ref: TeamPreferencesTableName
+          POLICIES_TABLE:
+            Ref: PoliciesTableName
 
   EvaluatePermissionRequestFunctionDefault:
     Type: AWS::Serverless::Function
     Condition: NotHasEvaluatePermissionRequestCodeUri
     Properties:
       CodeUri: evaluate_request/
-      Description: This function will contain a default business logic to decide whether this permission request should be automatically approved or not.
+      Description: This function will contain a default business logic to decide whether
+        this permission request should be automatically approved or not
       Handler: evaluate.lambdaHandler
       Runtime: nodejs12.x
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role:
+        Fn::GetAtt:
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
-          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
+          TEAM_PREFERENCES_TABLE:
+            Ref: TeamPreferencesTableName
+          POLICIES_TABLE:
+            Ref: PoliciesTableName
 
   AutoApprovePermissionRequestFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: evaluate_request/
-      Description: This function will automatically approve the permission request by making a request to the approval URL.
+      Description: This function will automatically approve the permission request
+        by making a request to the approval URL
       Handler: auto_approve.lambdaHandler
       Runtime: nodejs12.x
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role:
+        Fn::GetAtt:
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
-          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
-          APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
+          TEAM_PREFERENCES_TABLE:
+            Ref: TeamPreferencesTableName
+          APPROVAL_URL:
+            Fn::Sub: https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
+          POLICIES_TABLE:
+            Ref: PoliciesTableName
 
   ManualApprovePermissionRequestFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: evaluate_request/
-      Description: This function will send the approval URL to the security admin based on the preferred channel choice.
+      Description: This function will send the approval URL to the security admin
+        based on the preferred channel choice
       Handler: manual_approve.lambdaHandler
       Runtime: nodejs12.x
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role:
+        Fn::GetAtt:
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
-          APPROVAL_SNS_TOPIC: !Ref ApprovalNotificationTopic
-          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
-          APPROVAL_URL: !Sub https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
+          APPROVAL_SNS_TOPIC:
+            Ref: ApprovalNotificationTopic
+          TEAM_PREFERENCES_TABLE:
+            Ref: TeamPreferencesTableName
+          APPROVAL_URL:
+            Fn::Sub: https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/credentials/approve
+          POLICIES_TABLE:
+            Ref: PoliciesTableName
 
   ApproveRequestFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: approve/
-      Description: This function will actually assume the role and store the temporary credentials.
+      Description: This function will actually assume the role and store the temporary
+        credentials
       Handler: app.lambdaHandler
       Runtime: nodejs12.x
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role:
+        Fn::GetAtt:
+          - LambdaExecutionRole
+          - Arn
       Environment:
         Variables:
-          DEFAULT_ASSUMED_ROLE: !GetAtt AssumedRole.Arn
-          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
-          REQUESTS_TABLE: !Ref RequestTableName
-          TEMP_CREDENTIALS_TABLE: !Ref TempCredentialsTableName
-          CONSTRUCT_URL_FUNCTION: !Ref ConstructLoginURLFunction
+          TEAM_PREFERENCES_TABLE:
+            Ref: TeamPreferencesTableName
+          REQUESTS_TABLE:
+            Ref: RequestTableName
+          TEMP_CREDENTIALS_TABLE:
+            Ref: TempCredentialsTableName
+          CONSTRUCT_URL_FUNCTION:
+            Ref: ConstructLoginURLFunction
+          POLICIES_TABLE:
+            Ref: PoliciesTableName
       Events:
         API:
           Type: Api
           Properties:
-            RestApiId: !Ref STSBrokerAPI
+            RestApiId:
+              Ref: STSBrokerAPI
             Path: /credentials/approve
             Method: GET
             Auth:
-              Authorizer: NONE # TODO: Secure this API
+              Authorizer: NONE
             RequestParameters:
               - method.request.querystring.requestid
 
@@ -353,35 +449,12 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          -
-            Sid: AllowAssumeRole
+          - Sid: AllowAssumeRole
             Effect: Allow
             Action:
               - sts:AssumeRole
               - sts:TagSession
             Resource: "*"
-
-  # For simplicity, a default role to be assumed is created within the stack,
-  # Ideally role to be assumed should already be created and mapped on TeamPreferencesTableName
-  # This role will only be assumed when the team does not have any mapping IAM role
-  AssumedRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS:
-                - !GetAtt LambdaExecutionRole.Arn
-            Action:
-              - sts:AssumeRole
-              - sts:TagSession
-      RoleName: !Sub "DefaultAssumedRole-${AWS::Region}"
-      ManagedPolicyArns: # TODO: Managed policies for Default Role should be parameters
-        - arn:aws:iam::aws:policy/AmazonS3FullAccess
-        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
-        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
 
   RequestCredentialsRecords:
     Type: 'AWS::DynamoDB::Table'
@@ -535,9 +608,12 @@ Resources:
           ManualApprovePermissionRequestFunction: !GetAtt ManualApprovePermissionRequestFunction.Arn
 
 Outputs:
-  AssumedRoleARN:
-    Description: Default assumed Role ARN
-    Value: !GetAtt AssumedRole.Arn
+  ApproveRequestFunctionARN:
+    Description: ARN of the approval function.
+    Value: !GetAtt ApproveRequestFunction.Arn
+  ApproveRequestFunctionRoleARN:
+    Description: IAM Role ARN of the approval function. Must be included on the Assumed Role trust relationship.
+    Value: !GetAtt LambdaExecutionRole.Arn
   ApprovalNotificationTopicName:
     Description: Name of the approval SNS topic
     Value: !GetAtt ApprovalNotificationTopic.TopicName
@@ -555,3 +631,6 @@ Outputs:
   CognitoUserPoolClientID:
     Description: Cognito User Pool Client ID
     Value: !Ref CognitoUserPoolClient
+  TeamPreferencesTableName:
+    Description: Name of the DynamoDB Table storing the team info and role mapping.
+    Value: !Ref TeamPreferencesTableName

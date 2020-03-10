@@ -2,18 +2,17 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Notify admin via Slack channel
 
+Globals:
+  Function:
+    Timeout: 10
+
 Parameters:
   ApprovalNotificationTopicARN:
     Description: ARN of the approval SNS topic
     Type: String
-  SlackUrl:
-    Description: Webhook URL for integration with Slack
+  TeamPreferencesTableName:
+    Description: Name of the DynamoDB Table storing the team info and role mapping.
     Type: String
-    Default: "https://hooks.slack.com/services/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"
-
-Globals:
-  Function:
-    Timeout: 10
 
 Resources:
   LambdaToSlack:
@@ -22,9 +21,10 @@ Resources:
       Handler: app.handler
       Description: This function will send the approval URL to a slack channel.
       Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          SLACK_WEBHOOK_URL: !Ref SlackUrl
+          TEAM_PREFERENCES_TABLE: !Ref TeamPreferencesTableName
       Events:
         NotificationTopic:
           Type: SNS
@@ -33,3 +33,19 @@ Resources:
             FilterPolicy:
               channel:
                 - slack
+
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole

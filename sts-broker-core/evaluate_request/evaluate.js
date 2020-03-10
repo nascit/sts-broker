@@ -2,16 +2,28 @@
 
 const aws = require('aws-sdk');
 
-exports.lambdaHandler = async (event, context, callback) => {
+const dynamodb = require('aws-sdk/clients/dynamodb');
+const docClient = new dynamodb.DocumentClient();
+
+exports.lambdaHandler = async(event, context, callback) => {
 
     // Sample business logic to decide whether this permission request should be automatically approved or not.
 
-    if (event.permission_request.inline_policy || event.permission_request.policyARNs.length > 5) {
+    var params = {
+        TableName: process.env.POLICIES_TABLE,
+        Key: { policy_id: event.permission_request.policy },
+    };
+    const data = await docClient.get(params).promise();
+    const policy_risk = data.Item.risk;
+
+    var approved;
+    if (policy_risk > 50) {
         console.log("Manual approval required");
-        var approved = false;
-    } else {
+        approved = false;
+    }
+    else {
         console.log("Permission request is approved");
-        var approved = true;
+        approved = true;
     }
 
     const response = {
