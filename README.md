@@ -1,6 +1,6 @@
 # sts-broker
 
-This project can be used as a reference for a serverless custom Identity Broker architecture.
+This project can be used as a reference for a serverless AWS custom Identity Broker architecture.
 
 - Why would you need a Identity Broker?
     - Flexibility to manage permissions used among IAM roles/users.
@@ -17,7 +17,15 @@ This project can be used as a reference for a serverless custom Identity Broker 
 
 ![STS Broker Architecture](https://github.com/nascit/sts-broker/blob/dev/STSBroker.png "STS Broker architecture")
 
-## Deploy the sample application
+## Deploy the the STS Broker
+
+### AWS Serverless Application Repository
+
+The AWS Serverless Application Repository enables you to quickly deploy code samples, components, and complete applications. Each application is packaged with an AWS Serverless Application Model (SAM) template that defines the AWS resources used. There is no additional charge to use the Serverless Application Repository - you only pay for the AWS resources used in the applications you deploy.
+
+This project is [available](https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:355686237214:applications~STSBroker "STS Broker") on the Serverless Application Respository.
+
+### Using AWS SAM CLI
 
 For each nested SAM application, use 'sam build' to build your Lambda source code and generate deployment artifacts that target Lambda's execution environment.
 
@@ -98,7 +106,7 @@ base_role: The IAM Role members of this team will be able to assume. This role m
     - Lambda function execution role can be retrieved with the following command:
 
     ```bash
-    aws cloudformation describe-stacks --stack-name <CFN_STACK_NAME> --query "Stacks[0].Outputs[?OutputKey=='ApproveRequestFunctionRoleARN'].OutputValue" --output text --region AWS_REGION --profile <PROFILE>)
+    $ aws cloudformation describe-stacks --stack-name <CFN_STACK_NAME> --query "Stacks[0].Outputs[?OutputKey=='ApproveRequestFunctionRoleARN'].OutputValue" --output text --region AWS_REGION --profile <PROFILE>)
     ```
 
 
@@ -139,9 +147,7 @@ managed_policies: List of IAM managed policies to be passed on the AssumeRole AP
 
 ### Use your own permission request evaluation logic:
 
-Each company will have different rules to automatically approve a permission request. 
-
-Hence, you have the option to provide a S3 bucket location with your own Lambda function deployment package zip file.
+Each company will have different rules to automatically approve a permission request. Hence, you have the option to provide a S3 bucket location with your own Lambda function deployment package zip file.
 
 Your code will receive as the input the permission_request object and team info.
 
@@ -198,3 +204,7 @@ $ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USE
 [AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html)
 
 [cognitocurl](https://github.com/nordcloud/cognitocurl)
+
+## License Summary
+
+This code is made available under the MIT license. See the LICENSE file.

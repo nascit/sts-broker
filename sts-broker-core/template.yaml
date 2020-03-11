@@ -49,6 +49,7 @@ Parameters:
     MaxLength: '64'
     MinLength: '1'
     Type: String
+    Default: ''
   Stage:
     Description: Stage name (Dev, Prod)
     AllowedValues:
@@ -76,7 +77,7 @@ Parameters:
     Type: String
     Default: ''
   EvaluatePermissionRequestCodeUriKey:
-    AllowedPattern: ^$|.*(zip)
+    AllowedPattern: (^$|.*(zip))
     ConstraintDescription: This must be a .zip file.
     Description: S3 Uri location for the "EvaluatePermissionRequest" Lambda deployment
       package (S3 Bucket key)
@@ -247,10 +248,7 @@ Resources:
         DynamoDB:
           Type: DynamoDB
           Properties:
-            Stream:
-              Fn::GetAtt:
-                - RequestCredentialsRecords
-                - StreamArn
+            Stream: !GetAtt RequestCredentialsRecords.StreamArn
             StartingPosition: TRIM_HORIZON
             MaximumRetryAttempts: 5
             BatchSize: 5
