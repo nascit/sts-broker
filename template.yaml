@@ -19,7 +19,7 @@ Parameters:
     Default: ''
 
   EvaluatePermissionRequestCodeUriKey:
-    AllowedPattern: '^$|.*(zip)'
+    AllowedPattern: (^$|.*(zip))
     ConstraintDescription: This must be a .zip file.
     Description: S3 Uri location for Lambda deployment package (S3 Bucket key).
     Type: String
