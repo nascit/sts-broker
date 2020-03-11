@@ -16,7 +16,7 @@ Metadata:
     ReadmeUrl: ../README.md
     Labels: ['lambda', 'iam', 'sts', 'identity', 'broker']
     HomePageUrl: https://github.com/nascit/sts-broker
-    SemanticVersion: 0.0.1
+    SemanticVersion: 0.0.2
     SourceCodeUrl: https://github.com/nascit/sts-broker
 
 Parameters:
@@ -49,7 +49,6 @@ Parameters:
     MaxLength: '64'
     MinLength: '1'
     Type: String
-    Default: ''
   Stage:
     Description: Stage name (Dev, Prod)
     AllowedValues:
@@ -501,6 +500,20 @@ Resources:
       TimeToLiveSpecification:
         Enabled: true
         AttributeName: 'expiration'
+
+  PoliciesTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      TableName: !Ref PoliciesTableName
+      AttributeDefinitions:
+        - AttributeName: policy_id
+          AttributeType: S
+      SSESpecification:
+        SSEEnabled: true
+      KeySchema:
+        - KeyType: HASH
+          AttributeName: policy_id
 
   ApprovalNotificationTopic:
     Type: AWS::SNS::Topic
