@@ -16,7 +16,7 @@ Metadata:
     ReadmeUrl: ../README.md
     Labels: ['lambda', 'iam', 'sts', 'identity', 'broker']
     HomePageUrl: https://github.com/nascit/sts-broker
-    SemanticVersion: 0.0.2
+    SemanticVersion: 0.0.3
     SourceCodeUrl: https://github.com/nascit/sts-broker
 
 Parameters:
