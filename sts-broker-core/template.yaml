@@ -16,7 +16,7 @@ Metadata:
     ReadmeUrl: ../README.md
     Labels: ['lambda', 'iam', 'sts', 'identity', 'broker']
     HomePageUrl: https://github.com/nascit/sts-broker
-    SemanticVersion: 0.0.2
+    SemanticVersion: 0.0.3
     SourceCodeUrl: https://github.com/nascit/sts-broker
 
 Parameters:
@@ -103,7 +103,10 @@ Resources:
           Required: false
           Mutable: true
         - AttributeDataType: String
-          Name: team
+          Name: teams
+          Mutable: true
+        - AttributeDataType: Boolean
+          Name: admin
           Mutable: true
 
   CognitoUserPoolDomain:
@@ -129,6 +132,7 @@ Resources:
         - http://localhost:3000
       SupportedIdentityProviders:
         - COGNITO
+      RefreshTokenValidity: 1
       GenerateSecret: false
 
   STSBrokerAPI:
@@ -219,6 +223,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSNSFullAccess
 
   ValidatePermissionRequestFunction:
     Type: AWS::Serverless::Function
@@ -243,6 +248,8 @@ Resources:
             Ref: EvaluatePermissionRequestStateMachine
           POLICIES_TABLE:
             Ref: PoliciesTableName
+          USER_NOTIFICATION_TOPIC:
+            Ref: UserNotificationTopic
       Events:
         DynamoDB:
           Type: DynamoDB
@@ -520,6 +527,11 @@ Resources:
     Properties:
       TopicName: ApprovalNotificationTopic
 
+  UserNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: UserNotificationTopic
+
   EmailSubscription:
     Type: AWS::SNS::Subscription
     Properties:
@@ -620,11 +632,14 @@ Resources:
 
 Outputs:
   ApproveRequestFunctionARN:
-    Description: ARN of the approval function.
+    Description: ARN of the approval function
     Value: !GetAtt ApproveRequestFunction.Arn
   ApproveRequestFunctionRoleARN:
-    Description: IAM Role ARN of the approval function. Must be included on the Assumed Role trust relationship.
+    Description: IAM Role ARN of the approval function. Must be included on the Assumed Role trust relationship
     Value: !GetAtt LambdaExecutionRole.Arn
+  UserNotificationTopicARN:
+    Description: ARN of the user notification SNS topic
+    Value: !Ref UserNotificationTopic
   ApprovalNotificationTopicName:
     Description: Name of the approval SNS topic
     Value: !GetAtt ApprovalNotificationTopic.TopicName
@@ -643,5 +658,5 @@ Outputs:
     Description: Cognito User Pool Client ID
     Value: !Ref CognitoUserPoolClient
   TeamPreferencesTableName:
-    Description: Name of the DynamoDB Table storing the team info and role mapping.
+    Description: Name of the DynamoDB Table storing the team info and role mapping
     Value: !Ref TeamPreferencesTableName

@@ -24,7 +24,7 @@ exports.lambdaHandler = async(event, context, callback) => {
         return;
     }
 
-    if (!event.requestContext.authorizer.claims['custom:team']) {
+    if (!event.requestContext.authorizer.claims['custom:teams']) {
         errorResponse('User does not belong to any team.', context.awsRequestId, callback);
         return;
     }
@@ -33,6 +33,16 @@ exports.lambdaHandler = async(event, context, callback) => {
         var inline_policy = JSON.parse(event.body).inline_policy;
         var broker_policy = JSON.parse(event.body).policy;
         var sessionDuration = JSON.parse(event.body).sessionDuration;
+        var notificationChannel = JSON.parse(event.body).notificationChannel;
+        var notificationTarget;
+
+        if (notificationChannel == "sms") {
+            notificationTarget = event.requestContext.authorizer.claims.phone_number
+        } else if (notificationChannel == "email") {
+            notificationTarget = event.requestContext.authorizer.claims.email
+        } else if (notificationChannel == "slack") {
+            notificationTarget = event.requestContext.authorizer.claims['custom:slack_channel']
+        }
 
         // TODO: Validate inline policy if not empty.
 
@@ -83,11 +93,13 @@ exports.lambdaHandler = async(event, context, callback) => {
             requestid: uuid.v1(),
             userid: userid,
             email: event.requestContext.authorizer.claims.email,
-            team: event.requestContext.authorizer.claims['custom:team'],
+            team: event.requestContext.authorizer.claims['custom:teams'],
             inline_policy: inline_policy,
             policy: broker_policy,
             tags: tags,
             sessionDuration: sessionDuration,
+            notificationChannel: notificationChannel,
+            notificationTarget: notificationTarget,
             timestamp: new Date().getTime()
         };
 

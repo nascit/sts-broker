@@ -18,13 +18,39 @@ async function asyncForEach(array, callback) {
 exports.lambdaHandler = async(event, context, callback) => {
 
     await asyncForEach(event.Records, async(record) => {
-        if (record.eventName == "INSERT") {
+        if (record.eventName == "INSERT" || record.eventName == "MODIFY") {
 
             var request = dynamodbTranslator.translateOutput(record.dynamodb.NewImage, ItemShape);
             console.log('Permission request: %j', request);
             if (request.approved) {
                 console.log("Permission request is already approved. Sending notification to federated user...");
-                // TODO: Notify user the permission is already approved.
+
+                var msg = {};
+                msg["userid"] = request.userid;
+                msg["notificationTarget"] = request.notificationTarget;
+
+                var params = {
+                    Subject: 'Permission request approved',
+                    MessageAttributes: {
+                        team: {
+                            DataType: 'String',
+                            StringValue: request.team
+                        },
+                        channel: {
+                            DataType: 'String',
+                            StringValue: request.notificationChannel
+                        },
+                        event: {
+                           DataType: 'String',
+                           StringValue: "permission_approval"
+                       }
+                    },
+                    Message: JSON.stringify(msg),
+                    TopicArn: process.env.USER_NOTIFICATION_TOPIC
+                };
+
+                await sns.publish(params).promise();
+
             }
             else {
                 console.log("Permission request still not approved.");
