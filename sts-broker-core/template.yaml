@@ -45,7 +45,7 @@ Parameters:
   DefaultSecurityAdminEmailID:
     AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
     ConstraintDescription: This is not a valid email id
-    Description: Enter Approver Email ID
+    Description: Default Approver Email ID
     MaxLength: '64'
     MinLength: '1'
     Type: String
@@ -107,6 +107,9 @@ Resources:
           Mutable: true
         - AttributeDataType: Boolean
           Name: admin
+          Mutable: true
+        - AttributeDataType: String
+          Name: subscription_arn
           Mutable: true
 
   CognitoUserPoolDomain:
@@ -413,6 +416,27 @@ Resources:
             RequestParameters:
               - method.request.querystring.userid
 
+  CreateEmailSubscriptionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: email_subscription/
+      Description: This function create an email subscription for each user when they signup.
+      Handler: app.lambdaHandler
+      Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TEMP_CREDENTIALS_TABLE: !Ref TempCredentialsTableName
+          USER_NOTIFICATION_TOPIC: !Ref UserNotificationTopic
+      Events:
+        CognitoUserPoolPreSignup:
+          Type: Cognito
+          Properties:
+            UserPool:
+              Ref: CognitoUserPool
+            Trigger: PostAuthentication
+
+
   LambdaExecutionRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -431,6 +455,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+        - arn:aws:iam::aws:policy/AmazonCognitoPowerUser
         - !Ref InvokeLambdaManagedPolicy
 
   InvokeLambdaManagedPolicy:

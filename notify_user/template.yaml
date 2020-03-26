@@ -12,10 +12,10 @@ Parameters:
     Type: String
 
 Resources:
-  NotifyEmail:
+  NotifySMS:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: app.handler
+      Handler: sms.handler
       Description: This function will notify the user regarding an approval event.
       Runtime: nodejs12.x
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -26,7 +26,25 @@ Resources:
             Topic: !Ref UserNotificationTopicARN
             FilterPolicy:
               channel:
-                - email
+                - sms
+              event:
+                - 'permission_approval'
+
+  NotifySlack:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: slack.handler
+      Description: This function will notify the user regarding an approval event.
+      Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        NotificationTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref UserNotificationTopicARN
+            FilterPolicy:
+              channel:
+                - slack
               event:
                 - 'permission_approval'
 
@@ -45,3 +63,4 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSNSFullAccess

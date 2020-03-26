@@ -25,6 +25,14 @@ Parameters:
     Type: String
     Default: ''
 
+  DefaultSecurityAdminEmailID:
+    AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+    ConstraintDescription: This is not a valid email id
+    Description: Default Approver Email ID
+    MaxLength: '64'
+    MinLength: '1'
+    Type: String
+
 Resources:
 
   STSBrokerCore:
@@ -35,6 +43,7 @@ Resources:
         Stage: !Ref Stage
         EvaluatePermissionRequestCodeUriBucket: !Ref EvaluatePermissionRequestCodeUriBucket
         EvaluatePermissionRequestCodeUriKey: !Ref EvaluatePermissionRequestCodeUriKey
+        DefaultSecurityAdminEmailID: !Ref DefaultSecurityAdminEmailID
 
   NotifySlack:
     Type: AWS::Serverless::Application
