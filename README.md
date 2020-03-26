@@ -16,7 +16,7 @@ This project can be used as a reference for a serverless AWS custom Identity Bro
 
 ## Architecture
 
-![STS Broker Architecture](https://github.com/nascit/sts-broker/blob/dev/STSBroker.png "STS Broker architecture")
+![STS Broker Architecture](STSBroker.png "STS Broker architecture")
 
 
 ## Deploy the the STS Broker
