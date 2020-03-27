@@ -41,10 +41,6 @@ exports.lambdaHandler = async(event, context, callback) => {
                             DataType: 'String',
                             StringValue: request.userid
                         },
-                        team: {
-                            DataType: 'String',
-                            StringValue: request.team
-                        },
                         channel: {
                             DataType: 'String',
                             StringValue: request.notificationChannel
@@ -70,7 +66,7 @@ exports.lambdaHandler = async(event, context, callback) => {
 
                 // Get user's team info
 
-                var team = request.team;
+                var team = request.teams;
 
                 var params = {
                     TableName: process.env.TEAM_PREFERENCES_TABLE,

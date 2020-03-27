@@ -93,7 +93,7 @@ exports.lambdaHandler = async(event, context, callback) => {
             requestid: uuid.v1(),
             userid: userid,
             email: event.requestContext.authorizer.claims.email,
-            team: event.requestContext.authorizer.claims['custom:teams'],
+            teams: event.requestContext.authorizer.claims['custom:teams'],
             inline_policy: inline_policy,
             policy: broker_policy,
             tags: tags,

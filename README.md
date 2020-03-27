@@ -88,29 +88,7 @@ You can follow these guides to map attributes from your IdP to your User Pool:
 
 Your 'team_preferences' table must have the following attributes:
 
-- team_id (Partition Key):  A unique ID for the team the federated user belongs to. This must be available on the user ID token. User Pool has a custom attribute named 'team'.
-
-- preferred_channel: If manual approval is needed, this is where the security admin will be contacted (email, slack or default).
-
-    - If preferred_channel is 'default', the notification will be sent for the e-mail passed on the DefaultSecurityAdminEmailID parameter.
-    
-    - If preferred_channel is 'email', the table attribute 'admin_email' must be defined.
-
-- admin_email: Security admin e-mail if preferred channel is 'email'. If this is defined on the team_preferences table, we also need to create a subscription on the SNS topic with the following subscription filter policy:
-
-    ```bash
-    {
-      "channel": [
-        "email"
-      ],
-      "team": [
-        "<TEAM_ID>"
-      ]
-    }
-    ```
-  - [Subscribe an Endpoint to an Amazon SNS Topic Using the AWS Management Console](https://docs.aws.amazon.com/sns/latest/dg/sns-tutorial-create-subscribe-endpoint-to-topic.html#create-subscribe-endpoint-to-topic-aws-console)
-  
-- slack_webhook_url: Slack channel webhook URL if preferred channel is 'slack'.
+- team_id (Partition Key):  A unique ID for a team the federated user belongs to. This must be available on the user ID token. User Pool has a custom attribute named 'teams'.
 
 - policies: List of STS Broker policies defined on the policies table.
 
@@ -118,7 +96,6 @@ Your 'team_preferences' table must have the following attributes:
 
 ```bash
 {
-  "admin_email": "admin@domain.com",
   "policies": [
     {
       "description": "This policy will give access to MyApp development environment.",
@@ -128,9 +105,7 @@ Your 'team_preferences' table must have the following attributes:
       "description": "This policy will give access to MyApp production environment.",
       "id": "MyAppProd"
     }
-  ],
-  "preferred_channel": "default",
-  "slack_webhook_url": "https://hooks.slack.com/services/XXXX",
+  ]
   "team_id": "MyApp"
 }
 ```
@@ -182,6 +157,31 @@ Your 'policies' table must have the following attributes:
 
 - managed_policies: List of IAM managed policies to be passed on the AssumeRole API. (up to 10 managed policies)
 
+- preferred_channel: If manual approval is needed, this is where the security admin associated with this policy will be contacted (email, slack or default).
+
+    - If preferred_channel is 'default', the notification will be sent for the e-mail passed on the DefaultSecurityAdminEmailID parameter.
+    
+    - If preferred_channel is 'email', the table attribute 'admin_email' must be defined.
+    
+    - If preferred_channel is 'slack', the table attribute 'slack_webhook_url' must be defined.
+
+- admin_email: Security admin e-mail if preferred channel is 'email'. If this is defined on the policies table, we also need to create a subscription on the SNS topic with the following subscription filter policy:
+
+    ```bash
+    {
+      "channel": [
+        "email"
+      ],
+      "policy": [
+        "<POLICY_ID>"
+      ]
+    }
+    ```
+  - [Subscribe an Endpoint to an Amazon SNS Topic Using the AWS Management Console](https://docs.aws.amazon.com/sns/latest/dg/sns-tutorial-create-subscribe-endpoint-to-topic.html#create-subscribe-endpoint-to-topic-aws-console)
+  
+- slack_webhook_url: Slack channel webhook URL if preferred channel is 'slack'.
+
+
 #### Example of a policy item:
 
 ```bash
@@ -202,6 +202,9 @@ Your 'policies' table must have the following attributes:
   ],
   "policy_id": "MyApp dev",
   "risk": 30,
+  "admin_email": "admin@domain.com",
+  "preferred_channel": "default",
+  "slack_webhook_url": "https://hooks.slack.com/services/XXXX",
   "user_tags": [
     "admin"
   ]

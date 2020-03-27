@@ -3,6 +3,9 @@
 const aws = require('aws-sdk');
 const sns = new aws.SNS();
 
+const dynamodb = require('aws-sdk/clients/dynamodb');
+const docClient = new dynamodb.DocumentClient();
+
 function get_permissions(inline_policy) {
     var permissions = "";
     inline_policy.forEach(function(value) {
@@ -18,16 +21,29 @@ exports.lambdaHandler = async(event, context, callback) => {
 
     // Send message to SNS topic
 
+    const broker_policy = event.permission_request.policy;
+
+    var params = {
+        TableName: process.env.POLICIES_TABLE,
+        Key: { policy_id: broker_policy },
+    };
+    var data = await docClient.get(params).promise();
+    const policy = data.Item;
+
     var params = {
         Subject: 'Permissions request for approval',
         MessageAttributes: {
-            team: {
+            policy_id: {
                 DataType: 'String',
-                StringValue: event.team.team_id
+                StringValue: broker_policy
             },
             channel: {
                 DataType: 'String',
-                StringValue: event.team.preferred_channel
+                StringValue: policy.preferred_channel
+            },
+            slack_webhook_url: {
+                DataType: 'String',
+                StringValue: policy.slack_webhook_url
             }
         },
         Message: 'Hello Admin, \n\n' +

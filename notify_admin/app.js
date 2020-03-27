@@ -6,29 +6,18 @@ const dynamodb = require('aws-sdk/clients/dynamodb');
 const docClient = new dynamodb.DocumentClient();
 
 exports.handler = async (event, context, callback) => {
-    console.log(event["Records"][0]["Sns"]["MessageAttributes"]["team"]["Value"]);
+    console.log(event["Records"][0]["Sns"]["MessageAttributes"]);
 
-    // Get slack webhook URL based on user info from 'team_preferences' table
+    // Get slack webhook URL
 
-    var team = event["Records"][0]["Sns"]["MessageAttributes"]["team"]["Value"];
-
-    var params = {
-        TableName: process.env.TEAM_PREFERENCES_TABLE,
-        Key: {
-            team_id: team
-        }
-    };
-
-    var team_info = await docClient.get(params).promise();
-
-    // If team does not have slack URL, thrown an error
-
-    if (!team_info.Item.slack_webhook_url) {
-        errorResponse('This team does not have a slack channel!', context.awsRequestId, callback);
+    if (!event["Records"][0]["Sns"]["MessageAttributes"]["slack_webhook_url"]["Value"]) {
+        errorResponse('This policy does not have a slack channel associated!', context.awsRequestId, callback);
         return;
     }
 
-    const webhook = new IncomingWebhook(team_info.Item.slack_webhook_url);
+    // If team does not have slack URL, thrown an error
+
+    const webhook = new IncomingWebhook(event["Records"][0]["Sns"]["MessageAttributes"]["slack_webhook_url"]["Value"]);
 
     await webhook.send({
         text: event["Records"][0]["Sns"]["Message"],
