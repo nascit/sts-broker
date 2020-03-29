@@ -16,7 +16,7 @@ Metadata:
     ReadmeUrl: ../README.md
     Labels: ['lambda', 'iam', 'sts', 'identity', 'broker']
     HomePageUrl: https://github.com/nascit/sts-broker
-    SemanticVersion: 0.0.3
+    SemanticVersion: 0.0.4
     SourceCodeUrl: https://github.com/nascit/sts-broker
 
 Parameters:
@@ -26,6 +26,9 @@ Parameters:
   CognitoUserPoolClientName:
     Type: String
     Default: STSBrokerUserPoolClient
+  CognitoUserPoolDomainName:
+    Type: String
+    Default: 'stsbroker'
   RequestTableName:
     Description: Name of the DynamoDB Table storing the requests for temporary credentials
     Type: String
@@ -43,9 +46,9 @@ Parameters:
     Type: String
     Default: temp_credentials
   DefaultSecurityAdminEmailID:
-    AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+    AllowedPattern: '^[_A-Za-z0-9-\+\.]+(\.[_A-Za-z0-9-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9]+)*(\.[A-Za-z]{2,})$'
     ConstraintDescription: This is not a valid email id
-    Description: Enter Approver Email ID
+    Description: Default Approver Email ID
     MaxLength: '64'
     MinLength: '1'
     Type: String

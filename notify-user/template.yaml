@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Notify admin via Slack channel
+
+Globals:
+  Function:
+    Timeout: 10
+
+Parameters:
+  UserNotificationTopicARN:
+    Description: ARN of the user notification SNS topic
+    Type: String
+
+Resources:
+  NotifySMS:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: sms.handler
+      Description: This function will notify the user regarding an approval event.
+      Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        NotificationTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref UserNotificationTopicARN
+            FilterPolicy:
+              channel:
+                - sms
+              event:
+                - 'permission_approval'
+
+  NotifySlack:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: slack.handler
+      Description: This function will notify the user regarding an approval event.
+      Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        NotificationTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref UserNotificationTopicARN
+            FilterPolicy:
+              channel:
+                - slack
+              event:
+                - 'permission_approval'
+
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSNSFullAccess

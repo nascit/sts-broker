@@ -18,20 +18,55 @@ async function asyncForEach(array, callback) {
 exports.lambdaHandler = async(event, context, callback) => {
 
     await asyncForEach(event.Records, async(record) => {
-        if (record.eventName == "INSERT") {
+        if (record.eventName == "INSERT" || record.eventName == "MODIFY") {
 
             var request = dynamodbTranslator.translateOutput(record.dynamodb.NewImage, ItemShape);
             console.log('Permission request: %j', request);
             if (request.approved) {
                 console.log("Permission request is already approved. Sending notification to federated user...");
-                // TODO: Notify user the permission is already approved.
+
+                var msg = 'Hello user, \n\n' +
+                     'Good news! Your permission request has been approved.\n\n' +
+                     'Permission request ID: ' + request.requestid + '\n\n' +
+                     'STS Broker policy requested: \n' +
+                     request.policy +
+                     '\n\nFederated user e-mail : ' + request.email +
+                     '\n\nThanks,\n' +
+                     'Approval Team\n';
+
+                var params = {
+                    Subject: '[STS Broker] Permission request approved',
+                    MessageAttributes: {
+                        user_id: {
+                            DataType: 'String',
+                            StringValue: request.userid
+                        },
+                        channel: {
+                            DataType: 'String',
+                            StringValue: request.notificationChannel
+                        },
+                        target: {
+                            DataType: 'String',
+                            StringValue: request.notificationTarget
+                        },
+                        event: {
+                           DataType: 'String',
+                           StringValue: "permission_approval"
+                       }
+                    },
+                    Message: msg,
+                    TopicArn: process.env.USER_NOTIFICATION_TOPIC
+                };
+
+                await sns.publish(params).promise();
+
             }
             else {
                 console.log("Permission request still not approved.");
 
                 // Get user's team info
 
-                var team = request.team;
+                var team = request.teams;
 
                 var params = {
                     TableName: process.env.TEAM_PREFERENCES_TABLE,

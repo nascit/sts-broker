@@ -1,0 +1,14 @@
+{
+  "name": "notify-slack",
+  "version": "1.0.0",
+  "description": "Notify admin via Slack channel",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@slack/webhook": "^5.0.2"
+  }
+}

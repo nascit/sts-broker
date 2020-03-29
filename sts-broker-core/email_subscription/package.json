@@ -5,10 +5,13 @@
   "author": "SAM CLI",
   "license": "MIT",
   "dependencies": {
-    "really-relaxed-json": "^0.2.24",
     "uuid": "^2.0.3"
   },
   "scripts": {
     "test": "mocha tests/unit/"
+  },
+  "devDependencies": {
+    "chai": "^4.2.0",
+    "mocha": "^6.1.4"
   }
 }
