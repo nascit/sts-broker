@@ -106,13 +106,19 @@ Resources:
           Required: false
           Mutable: true
         - AttributeDataType: String
-          Name: team
+          Name: teams
+          Mutable: true
+        - AttributeDataType: Boolean
+          Name: admin
+          Mutable: true
+        - AttributeDataType: String
+          Name: subscription_arn
           Mutable: true
 
   CognitoUserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
-      Domain: stsbroker
+      Domain: !Sub ${CognitoUserPoolDomainName}-${AWS::AccountId}
       UserPoolId: !Ref CognitoUserPool
 
   CognitoUserPoolClient:
@@ -132,6 +138,7 @@ Resources:
         - http://localhost:3000
       SupportedIdentityProviders:
         - COGNITO
+      RefreshTokenValidity: 3
       GenerateSecret: false
 
   STSBrokerAPI:
@@ -222,6 +229,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSNSFullAccess
 
   ValidatePermissionRequestFunction:
     Type: AWS::Serverless::Function
@@ -246,6 +254,8 @@ Resources:
             Ref: EvaluatePermissionRequestStateMachine
           POLICIES_TABLE:
             Ref: PoliciesTableName
+          USER_NOTIFICATION_TOPIC:
+            Ref: UserNotificationTopic
       Events:
         DynamoDB:
           Type: DynamoDB
@@ -409,6 +419,27 @@ Resources:
             RequestParameters:
               - method.request.querystring.userid
 
+  CreateEmailSubscriptionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: email_subscription/
+      Description: This function create an email subscription for each user when they signup.
+      Handler: app.lambdaHandler
+      Runtime: nodejs12.x
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TEMP_CREDENTIALS_TABLE: !Ref TempCredentialsTableName
+          USER_NOTIFICATION_TOPIC: !Ref UserNotificationTopic
+      Events:
+        CognitoUserPoolPreSignup:
+          Type: Cognito
+          Properties:
+            UserPool:
+              Ref: CognitoUserPool
+            Trigger: PostAuthentication
+
+
   LambdaExecutionRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -427,6 +458,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+        - arn:aws:iam::aws:policy/AmazonCognitoPowerUser
         - !Ref InvokeLambdaManagedPolicy
 
   InvokeLambdaManagedPolicy:
@@ -522,6 +554,11 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: ApprovalNotificationTopic
+
+  UserNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: UserNotificationTopic
 
   EmailSubscription:
     Type: AWS::SNS::Subscription
@@ -623,11 +660,14 @@ Resources:
 
 Outputs:
   ApproveRequestFunctionARN:
-    Description: ARN of the approval function.
+    Description: ARN of the approval function
     Value: !GetAtt ApproveRequestFunction.Arn
   ApproveRequestFunctionRoleARN:
-    Description: IAM Role ARN of the approval function. Must be included on the Assumed Role trust relationship.
+    Description: IAM Role ARN of the approval function. Must be included on the Assumed Role trust relationship
     Value: !GetAtt LambdaExecutionRole.Arn
+  UserNotificationTopicARN:
+    Description: ARN of the user notification SNS topic
+    Value: !Ref UserNotificationTopic
   ApprovalNotificationTopicName:
     Description: Name of the approval SNS topic
     Value: !GetAtt ApprovalNotificationTopic.TopicName
@@ -636,7 +676,7 @@ Outputs:
     Value: !Ref ApprovalNotificationTopic
   STSBrokerAPI:
     Description: API Gateway endpoint URL
-    Value: !Sub "https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
+    Value: !Sub "https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
   CognitoUserPoolARN:
     Value: !GetAtt CognitoUserPool.Arn
   CognitoUserPoolID:
@@ -645,6 +685,9 @@ Outputs:
   CognitoUserPoolClientID:
     Description: Cognito User Pool Client ID
     Value: !Ref CognitoUserPoolClient
+  CognitoUserPoolDomain:
+    Description: Cognito User Pool domain
+    Value: !Sub "https://${CognitoUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com"
   TeamPreferencesTableName:
-    Description: Name of the DynamoDB Table storing the team info and role mapping.
+    Description: Name of the DynamoDB Table storing the team info and role mapping
     Value: !Ref TeamPreferencesTableName
