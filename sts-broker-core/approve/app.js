@@ -141,7 +141,7 @@ exports.lambdaHandler = async(event, context, callback) => {
               h1 { color: #73757d; }
             </style>
             <body>
-              <h1>Permission request approved</h1>
+              <h1>[STS Broker] Permission request approved</h1>
               ${message}
             </body>
           </html>`;

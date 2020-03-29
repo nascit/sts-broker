@@ -16,7 +16,7 @@ Metadata:
     ReadmeUrl: ../README.md
     Labels: ['lambda', 'iam', 'sts', 'identity', 'broker']
     HomePageUrl: https://github.com/nascit/sts-broker
-    SemanticVersion: 0.0.3
+    SemanticVersion: 0.0.4
     SourceCodeUrl: https://github.com/nascit/sts-broker
 
 Parameters:
@@ -26,6 +26,9 @@ Parameters:
   CognitoUserPoolClientName:
     Type: String
     Default: STSBrokerUserPoolClient
+  CognitoUserPoolDomainName:
+    Type: String
+    Default: 'stsbroker'
   RequestTableName:
     Description: Name of the DynamoDB Table storing the requests for temporary credentials
     Type: String
@@ -43,7 +46,7 @@ Parameters:
     Type: String
     Default: temp_credentials
   DefaultSecurityAdminEmailID:
-    AllowedPattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+    AllowedPattern: '^[_A-Za-z0-9-\+\.]+(\.[_A-Za-z0-9-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9]+)*(\.[A-Za-z]{2,})$'
     ConstraintDescription: This is not a valid email id
     Description: Default Approver Email ID
     MaxLength: '64'
@@ -115,7 +118,7 @@ Resources:
   CognitoUserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
-      Domain: stsbroker
+      Domain: !Sub ${CognitoUserPoolDomainName}-${AWS::AccountId}
       UserPoolId: !Ref CognitoUserPool
 
   CognitoUserPoolClient:
@@ -673,7 +676,7 @@ Outputs:
     Value: !Ref ApprovalNotificationTopic
   STSBrokerAPI:
     Description: API Gateway endpoint URL
-    Value: !Sub "https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
+    Value: !Sub "https://${STSBrokerAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
   CognitoUserPoolARN:
     Value: !GetAtt CognitoUserPool.Arn
   CognitoUserPoolID:
@@ -682,6 +685,9 @@ Outputs:
   CognitoUserPoolClientID:
     Description: Cognito User Pool Client ID
     Value: !Ref CognitoUserPoolClient
+  CognitoUserPoolDomain:
+    Description: Cognito User Pool domain
+    Value: !Sub "https://${CognitoUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com"
   TeamPreferencesTableName:
     Description: Name of the DynamoDB Table storing the team info and role mapping
     Value: !Ref TeamPreferencesTableName

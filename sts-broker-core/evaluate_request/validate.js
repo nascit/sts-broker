@@ -35,7 +35,7 @@ exports.lambdaHandler = async(event, context, callback) => {
                      'Approval Team\n';
 
                 var params = {
-                    Subject: 'Permission request approved',
+                    Subject: '[STS Broker] Permission request approved',
                     MessageAttributes: {
                         user_id: {
                             DataType: 'String',

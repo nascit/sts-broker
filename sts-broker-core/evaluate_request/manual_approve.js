@@ -31,7 +31,7 @@ exports.lambdaHandler = async(event, context, callback) => {
     const policy = data.Item;
 
     var params = {
-        Subject: 'Permissions request for approval',
+        Subject: '[STS Broker] Permissions request for approval',
         MessageAttributes: {
             policy_id: {
                 DataType: 'String',

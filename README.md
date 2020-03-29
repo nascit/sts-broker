@@ -26,7 +26,7 @@ This project can be used as a reference for a serverless AWS custom Identity Bro
 
 The AWS Serverless Application Repository enables you to quickly deploy code samples, components, and complete applications. Each application is packaged with an AWS Serverless Application Model (SAM) template that defines the AWS resources used. There is no additional charge to use the Serverless Application Repository - you only pay for the AWS resources used in the applications you deploy.
 
-This project is [available](https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:355686237214:applications~STSBroker "STS Broker") on the Serverless Application Respository.
+This project is [available](https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:355686237214:applications~STSBroker "STS Broker") on the Serverless Application Respository. Only 'sts-broker-core' is available on SAR. If you want to deploy the notification components (notify-user, notify-admin), use AWS SAM CLI.
 
 
 ### Using AWS SAM CLI
