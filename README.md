@@ -2,17 +2,19 @@
 
 This project can be used as a reference for a serverless AWS custom Identity Broker architecture.
 
-- Why would you need a Identity Broker?
+- Why would you need a custom Identity Broker?
 
-    - Flexibility to manage permissions used among IAM roles/users.
-    - Limit of how many IAM roles/users an AWS account can have.
-    - Record every permission request made (traceability).
-    - Least privilege access: Avoid sharing same permissions among federated users.
+    - Rely on attributes for fine-grained permissions at scale.
+        - [What Is ABAC (Attribute-based access control) for AWS?](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction_attribute-based-access-control.html)
+        - You can tag your STS Broker temporary sessions based on federated user attributes and/or STS Broker policy default tags.
+    - Least privilege access: The right access to the right things at the right time to do their job and nothing more.
     - Implement a strong identity foundation.
+    - Record every permission request made (traceability).
+    - Limit of how many IAM roles/users an AWS account can have.
     - More details on this Re:Invent session:
     
-    [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/vbjFjMNVEpc/0.jpg)](https://www.youtube.com/watch?v=vbjFjMNVEpc&t=420s)
-    
+		[<img src="https://img.youtube.com/vi/vbjFjMNVEpc/0.jpg" width="280">](https://www.youtube.com/watch?v=vbjFjMNVEpc&t=420s)
+   
 
 ## Architecture
 
@@ -40,7 +42,7 @@ $ sam build
 To prepare the application for deployment, use the `sam package` command.
 
 ```bash
-$ sam package --output-template-file packaged.yaml --s3-bucket BUCKET_NAME --region AWS_REGION --profile <PROFILE>
+$ sam package --output-template-file packaged.yaml --s3-bucket <BUCKET_NAME> --region <AWS_REGION> --profile <PROFILE>
 ```
 
 The SAM CLI creates deployment packages, uploads them to the S3 bucket, and creates a new version of the template that refers to the artifacts in the bucket. 
@@ -48,7 +50,7 @@ The SAM CLI creates deployment packages, uploads them to the S3 bucket, and crea
 To deploy the application, use the `sam deploy` command.
 
 ```bash
-$ sam deploy --template-file packaged.yaml --stack-name sts-broker --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --region AWS_REGION --profile <PROFILE>
+$ sam deploy --template-file packaged.yaml --stack-name sts-broker --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --region <AWS_REGION> --profile <PROFILE>
 ```
 
 
@@ -75,7 +77,7 @@ By using Cognito, you can setup your own OIDC/SAML/Social Identity Provider. Her
 
 ### Map attributes from your Identity Provider
 
-Your User Pool will need to have a couple of custom attributes populated. Most important one is 'custom:teams'. This custom attribute must contain a list of the groups/roles/teams your user belongs to. Based on this attribute, the STS Broker will list the policies available to this user.
+Your User Pool will need to have a couple of custom attributes populated. Most important one is **'custom:teams'**. This required custom attribute **must** contain a list of the groups/roles/teams your user belongs to. Based on this attribute, the STS Broker will list the policies available to this user.
 
 You can follow these guides to map attributes from your IdP to your User Pool:
 
@@ -112,50 +114,66 @@ Your 'team_preferences' table must have the following attributes:
 
 
 ### Populate 'policies' table
-     
+
+Here we introduce the concept of a STS Broker policy. Different from a standard IAM Policy, the STS Broker policy will be a combination of IAM managed policies passed to a STS AssumeRole API call together with tags. Depending on the risk attribute of a STS Broker policy, it will only be available under manual permission request approval.
+
 Your 'policies' table must have the following attributes:
 
-- policy_id (Partition key): A unique ID to uniquely identity this STS Broker policy.
+- policy_id (Partition key): ID to uniquely identity this STS Broker policy.
 
-- base_role: The IAM Role to be assumed. This role must include Lambda (ApproveRequestFunction) execution role in its Trust Relationship. 'ApproveRequestFunctionRoleARN' is a output of the CloudFormation stack.
+- base_role: The IAM role to be assumed. This base IAM role will be more permissive as we will apply fine-grained permissions on the IAM managed policies passed to the session.
 
-  - Example:
-    ```bash
-    {
-        "Version": "2012-10-17",
-        "Statement": [
-             {
-                "Effect": "Allow",
-                "Principal": {
-                    "AWS": "<LAMBDA_EXECUTION_ROLE_ARN>"
-                },
-                "Action": [
-                   "sts:AssumeRole",
-                   "sts:TagSession"
-                ]
-             }
-        ]
-    }
-    ```
+    - This role **must** include Lambda (ApproveRequestFunction) execution role in its Trust Relationship:
+    
+        ```bash         
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+               {
+                  "Effect": "Allow",
+                  "Principal": {
+                      "AWS": "<LAMBDA_EXECUTION_ROLE_ARN>"
+                  },
+                  "Action": [
+                     "sts:AssumeRole",
+                     "sts:TagSession"
+                  ]
+               }
+            ]
+        }
+        ```
+              
+    - 'ApproveRequestFunctionRoleARN' is a output of the CloudFormation stack.
 
-    - Lambda function execution role can be retrieved with the following command:
+        - Lambda function execution role can be retrieved with the following command:
 
-    ```bash
-    $ aws cloudformation describe-stacks --stack-name <CFN_STACK_NAME> --query "Stacks[0].Outputs[?OutputKey=='ApproveRequestFunctionRoleARN'].OutputValue" --output text --region AWS_REGION --profile <PROFILE>)
-    ```
-
+        ```bash
+        $ aws cloudformation describe-stacks --stack-name <CFN_STACK_NAME> --query "Stacks[0].Outputs[?OutputKey=='ApproveRequestFunctionRoleARN'].OutputValue" --output text --region AWS_REGION --profile <PROFILE>)
+        ```
 
 - account: AWS account number related to this policy.
 
 - default_tags: List of key-value pair for pre defined tags. When using this policy, these tags will always be passed to the AssumeRole API.
 
-- user_tags: Tags we need to retrieve from user claims. Eg.: "admin" tag should be false if it's a normal user. These user tags will be based on user custom attributes.
+- user_tags: Tags we need to retrieve from user claims/attributes. Eg.: "admin" tag should be false if it's a normal user. These user tags will be based on user custom attributes.
 
 - description: Brief STS Broker policy description.
 
 - risk: A value (from 1-100) which represents the security risk associated with the policy.
 
 - managed_policies: List of IAM managed policies to be passed on the AssumeRole API. (up to 10 managed policies)
+
+    - Ideally, these managed policies should use **Conditions** to rely on session tags. Eg.:
+    
+        ```bash
+        "Condition": {
+            "StringEquals": {
+                "ec2:ResourceTag/environment": "${aws:PrincipalTag/environment}",
+                "ec2:ResourceTag/region": "${aws:PrincipalTag/region}"
+            }
+        }
+        ```
+    
 
 - preferred_channel: If manual approval is needed, this is where the security admin associated with this policy will be contacted (email, slack or default).
 
@@ -182,7 +200,7 @@ Your 'policies' table must have the following attributes:
 - slack_webhook_url: Slack channel webhook URL if preferred channel is 'slack'.
 
 
-#### Example of a policy item:
+#### Example of a policy:
 
 ```bash
 {
@@ -218,9 +236,7 @@ By default, the permission request evaluation will rely on the policy risk attri
 
 However, each company will have different rules to automatically approve a permission request. Hence, you have the option to provide a S3 bucket location with your own Lambda function deployment package zip file.
 
-Your code will receive as the input the permission_request object and team info.
-
-It simply needs to return an "automated_approval" attribute:
+Your code will receive as the input the permission_request object. It simply needs to return an "automated_approval" attribute:
 
 ```bash
 const response = {
@@ -234,7 +250,7 @@ If you do not provide your custom permission request evaluation code, a default 
 
 ## Invoke STS Broker
 
-Ideally you should use [STS Broker CLI](https://www.npmjs.com/package/stsbroker "STS Broker CLI") to interact with your custom identity broker. Please follow the instructions there to learn how to configure the CLI and perform the permission requests.
+We strongly recommend you to use [STS Broker CLI](https://www.npmjs.com/package/stsbroker "STS Broker CLI") to interact with your custom identity broker. Please follow the instructions there to learn how to configure the CLI and perform the permission requests.
 
 You also have the option to make direct requests.
 
@@ -274,6 +290,14 @@ $ cognitocurl --cognitoclient <COGNITO_USER_POOL_CLIENT> --userpool <COGNITO_USE
 [AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html)
 
 [cognitocurl](https://github.com/nordcloud/cognitocurl)
+
+## Roadmap
+
+The whole point on building a custom Identity Broker on AWS is to have flexibility. Possibilities here are endless to make your AWS environment more secure. Here are some ideas:
+
+- Use machine learning models to automate approval based on history.
+
+- UI to manage STS Broker policies.
 
 ## License Summary
 
