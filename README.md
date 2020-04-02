@@ -1,16 +1,23 @@
-# sts-broker
+# STS Broker
 
 This project can be used as a reference for a serverless AWS custom Identity Broker architecture.
 
+- What is an Identity Broker?
+
+An Identity Broker is responsible for mapping the end user identifier into a set of temporary credentials for accessing AWS resources. Within the broker, you can apply your own rules to approve and match permissions based on the user data.
+
+<img src="IdentityBroker.png?raw=true" width="400">
+
 - Why would you need a custom Identity Broker?
 
+    - Least privilege access: "The right access to the right things at the right time to do their job and nothing more."
+    - Enforce separation of duties with the appropriate authorization for each interaction with your AWS resources.
     - Rely on attributes for fine-grained permissions at scale.
         - [What Is ABAC (Attribute-based access control) for AWS?](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction_attribute-based-access-control.html)
         - You can tag your STS Broker temporary sessions based on federated user attributes and/or STS Broker policy default tags.
-    - Least privilege access: The right access to the right things at the right time to do their job and nothing more.
-    - Implement a strong identity foundation.
+    - Reduce or even eliminating reliance on long-term credentials.
+    - Centralize privilege management across your organization.
     - Record every permission request made (traceability).
-    - Limit of how many IAM roles/users an AWS account can have.
     - More details on this Re:Invent session:
     
 		[<img src="https://img.youtube.com/vi/vbjFjMNVEpc/0.jpg" width="280">](https://www.youtube.com/watch?v=vbjFjMNVEpc&t=420s)
