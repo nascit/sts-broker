@@ -31,6 +31,10 @@ Parameters:
   CognitoUserPoolDomainName:
     Type: String
     Default: 'stsbroker'
+  PoliciesTableName:
+    Description: Name of the DynamoDB Table storing STS Broker policies
+    Type: String
+    Default: policies
 
 Resources:
   STSBrokerCore:
@@ -43,6 +47,15 @@ Resources:
         EvaluatePermissionRequestCodeUriKey: !Ref EvaluatePermissionRequestCodeUriKey
         DefaultSecurityAdminEmailID: !Ref DefaultSecurityAdminEmailID
         CognitoUserPoolDomainName: !Ref CognitoUserPoolDomainName
+        PoliciesTableName: !Ref PoliciesTableName
+  AdminAPI:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: admin/packaged.yaml
+      Parameters:
+        Stage: !Ref Stage
+        CognitoUserPoolID: !GetAtt STSBrokerCore.Outputs.CognitoUserPoolID
+        PoliciesTableName: !Ref PoliciesTableName
   NotifySlack:
     Type: AWS::Serverless::Application
     Properties:

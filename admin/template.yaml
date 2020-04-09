@@ -1,0 +1,147 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: 'AWS::Serverless-2016-10-31'
+
+Parameters:
+  Stage:
+    Description: Stage name (Dev, Prod)
+    AllowedValues:
+      - Dev
+      - Prod
+    Type: String
+    Default: Dev
+    ConstraintDescription: Must specify Prod or Dev
+  LogLevel:
+    Type: String
+    Default: INFO
+  QueryLimit:
+    Type: Number
+    Default: 20
+    Description: Maximum number of items to return from a single query
+  RetentionInDays:
+    Type: Number
+    Default: 30
+    Description: Retention in days for CloudWatch log groups
+  CognitoUserPoolID:
+    Type: String
+    Description: Cognito User Pool ID
+  PoliciesTableName:
+    Description: Name of the DynamoDB Table storing STS Broker policies
+    Type: String
+    Default: policies
+
+Resources:
+  ###############
+  # GRAPHQL API #
+  ###############
+  Api:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name: !Sub "stsbroker-${Stage}-admin-api"
+      AuthenticationType: API_KEY
+      AdditionalAuthenticationProviders:
+        - AuthenticationType: AMAZON_COGNITO_USER_POOLS
+          UserPoolConfig:
+            # AppIdClientRegex: !Sub "ecommerce-${Environment}-frontend-api.*"
+            AwsRegion: !Ref AWS::Region
+            UserPoolId: !Ref CognitoUserPoolID
+      LogConfig:
+        CloudWatchLogsRoleArn: !GetAtt ApiLoggingRole.Arn
+        FieldLogLevel: ALL
+      XrayEnabled: true
+
+  ApiLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/appsync/apis/${Api.ApiId}"
+      RetentionInDays: !Ref RetentionInDays
+
+  Schema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: !GetAtt Api.ApiId
+      DefinitionS3Location: "resources/api.graphql"
+
+  ############
+  # POLICIES #
+  ############
+  PoliciesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DeliveryTableAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PoliciesTableName}"
+
+  PoliciesDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt Api.ApiId
+      Name: PoliciesTable
+      Type: AMAZON_DYNAMODB
+      ServiceRoleArn: !GetAtt PoliciesRole.Arn
+      DynamoDBConfig:
+        AwsRegion: !Ref AWS::Region
+        TableName: !Ref PoliciesTableName
+
+  CreatePolicyResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt Api.ApiId
+      DataSourceName: !GetAtt PoliciesDataSource.Name
+      FieldName: createPolicies
+      TypeName: Mutation
+      RequestMappingTemplate: !Sub |
+        {
+          "version": "2017-02-28",
+          "operation": "PutItem",
+          "key": {
+            "policy_id": $util.dynamodb.toDynamoDBJson($ctx.args.input.policy_id),
+          },
+          "attributeValues": $util.dynamodb.toMapValuesJson($ctx.args.input),
+          "condition": {
+            "expression": "attribute_not_exists(#policy_id)",
+            "expressionNames": {
+              "#policy_id": "policy_id",
+            },
+          },
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($context.result)

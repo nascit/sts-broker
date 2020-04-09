@@ -1,0 +1,156 @@
+input CreatePoliciesInput {
+	policy_id: String!
+	account: String!
+	admin_email: String!
+	base_role: String!
+	default_tags: [AWSJSON]
+	description: String
+	managed_policies: [String]!
+	preferred_channel: String!
+	risk: String!
+	slack_webhook_url: String
+	user_tags: [String]
+}
+
+input DeletePoliciesInput {
+	policy_id: String!
+}
+
+type Mutation {
+	createPolicies(input: CreatePoliciesInput!): Policies
+	updatePolicies(input: UpdatePoliciesInput!): Policies
+	deletePolicies(input: DeletePoliciesInput!): Policies
+}
+
+type Policies {
+	policy_id: String!
+	account: String!
+	admin_email: String!
+	base_role: String!
+	default_tags: [AWSJSON]
+	description: String
+	managed_policies: [String]!
+	preferred_channel: String!
+	risk: String!
+	slack_webhook_url: String
+	user_tags: [String]
+}
+
+type PoliciesConnection {
+	items: [Policies]
+	nextToken: String
+}
+
+type Query {
+	getPolicies(policy_id: String!): Policies
+	listPolicies(filter: TablePoliciesFilterInput, limit: Int, nextToken: String): PoliciesConnection
+}
+
+type Subscription {
+	onCreatePolicies(
+		policy_id: String,
+		account: String,
+		admin_email: String,
+		base_role: String,
+		default_tags: [AWSJSON]
+	): Policies
+		@aws_subscribe(mutations: ["createPolicies"])
+	onUpdatePolicies(
+		policy_id: String,
+		account: String,
+		admin_email: String,
+		base_role: String,
+		default_tags: [AWSJSON]
+	): Policies
+		@aws_subscribe(mutations: ["updatePolicies"])
+	onDeletePolicies(
+		policy_id: String,
+		account: String,
+		admin_email: String,
+		base_role: String,
+		default_tags: [AWSJSON]
+	): Policies
+		@aws_subscribe(mutations: ["deletePolicies"])
+}
+
+input TableBooleanFilterInput {
+	ne: Boolean
+	eq: Boolean
+}
+
+input TableFloatFilterInput {
+	ne: Float
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+	contains: Float
+	notContains: Float
+	between: [Float]
+}
+
+input TableIDFilterInput {
+	ne: ID
+	eq: ID
+	le: ID
+	lt: ID
+	ge: ID
+	gt: ID
+	contains: ID
+	notContains: ID
+	between: [ID]
+	beginsWith: ID
+}
+
+input TableIntFilterInput {
+	ne: Int
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+	contains: Int
+	notContains: Int
+	between: [Int]
+}
+
+input TablePoliciesFilterInput {
+	policy_id: TableStringFilterInput
+	account: TableStringFilterInput
+	admin_email: TableStringFilterInput
+	base_role: TableStringFilterInput
+	description: TableStringFilterInput
+	managed_policies: TableStringFilterInput
+	preferred_channel: TableStringFilterInput
+	risk: TableStringFilterInput
+	slack_webhook_url: TableStringFilterInput
+	user_tags: TableStringFilterInput
+}
+
+input TableStringFilterInput {
+	ne: String
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	contains: String
+	notContains: String
+	between: [String]
+	beginsWith: String
+}
+
+input UpdatePoliciesInput {
+	policy_id: String!
+	account: String
+	admin_email: String
+	base_role: String
+	default_tags: [AWSJSON]
+	description: String
+	managed_policies: [String]
+	preferred_channel: String
+	risk: String
+	slack_webhook_url: String
+	user_tags: [String]
+}
