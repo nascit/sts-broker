@@ -1,12 +1,12 @@
 input CreatePoliciesInput {
 	policy_id: String!
 	account: String!
-	admin_email: String!
+	admin_email: String
 	base_role: String!
 	default_tags: [AWSJSON]
 	description: String
 	managed_policies: [String]!
-	preferred_channel: String!
+	preferred_channel: String
 	risk: String!
 	slack_webhook_url: String
 	user_tags: [String]
@@ -25,12 +25,12 @@ type Mutation {
 type Policies {
 	policy_id: String!
 	account: String!
-	admin_email: String!
+	admin_email: String
 	base_role: String!
 	default_tags: [AWSJSON]
 	description: String
 	managed_policies: [String]!
-	preferred_channel: String!
+	preferred_channel: String
 	risk: String!
 	slack_webhook_url: String
 	user_tags: [String]

@@ -28,6 +28,13 @@ Parameters:
     Description: Name of the DynamoDB Table storing STS Broker policies
     Type: String
     Default: policies
+  TeamPreferencesTableName:
+    Description: Name of the DynamoDB Table storing the team info/preferences
+    Type: String
+    Default: team_preferences
+  ApproveRequestFunctionRoleARN:
+    Description: IAM Role ARN of the approval function. Must be included on the Assumed Role trust relationship
+    Type: String
 
 Resources:
   ###############
@@ -41,7 +48,6 @@ Resources:
       AdditionalAuthenticationProviders:
         - AuthenticationType: AMAZON_COGNITO_USER_POOLS
           UserPoolConfig:
-            # AppIdClientRegex: !Sub "ecommerce-${Environment}-frontend-api.*"
             AwsRegion: !Ref AWS::Region
             UserPoolId: !Ref CognitoUserPoolID
       LogConfig:
@@ -120,6 +126,7 @@ Resources:
         AwsRegion: !Ref AWS::Region
         TableName: !Ref PoliciesTableName
 
+  # TODO: This resolver also needs to edit the base_role trust relationship to include ApproveRequestFunctionRoleARN
   CreatePolicyResolver:
     Type: AWS::AppSync::Resolver
     DependsOn: Schema
@@ -142,6 +149,158 @@ Resources:
               "#policy_id": "policy_id",
             },
           },
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($context.result)
+
+  UpdatePolicyResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt Api.ApiId
+      DataSourceName: !GetAtt PoliciesDataSource.Name
+      FieldName: updatePolicies
+      TypeName: Mutation
+      RequestMappingTemplate: |
+        {
+          "version": "2017-02-28",
+          "operation": "UpdateItem",
+          "key": {
+            "policy_id": $util.dynamodb.toDynamoDBJson($ctx.args.input.policy_id),
+          },
+
+          ## Set up some space to keep track of things we're updating **
+          #set( $expNames  = {} )
+          #set( $expValues = {} )
+          #set( $expSet = {} )
+          #set( $expAdd = {} )
+          #set( $expRemove = [] )
+
+          ## Iterate through each argument, skipping keys **
+          #foreach( $entry in $util.map.copyAndRemoveAllKeys($ctx.args.input, ["policy_id"]).entrySet() )
+            #if( $util.isNull($entry.value) )
+              ## If the argument is set to "null", then remove that attribute from the item in DynamoDB **
+
+              #set( $discard = ${expRemove.add("#${entry.key}")} )
+              $!{expNames.put("#${entry.key}", "${entry.key}")}
+            #else
+              ## Otherwise set (or update) the attribute on the item in DynamoDB **
+
+              $!{expSet.put("#${entry.key}", ":${entry.key}")}
+              $!{expNames.put("#${entry.key}", "${entry.key}")}
+              $!{expValues.put(":${entry.key}", $util.dynamodb.toDynamoDB($entry.value))}
+            #end
+          #end
+
+          ## Start building the update expression, starting with attributes we're going to SET **
+          #set( $expression = "" )
+          #if( !${expSet.isEmpty()} )
+            #set( $expression = "SET" )
+            #foreach( $entry in $expSet.entrySet() )
+              #set( $expression = "${expression} ${entry.key} = ${entry.value}" )
+              #if ( $foreach.hasNext )
+                #set( $expression = "${expression}," )
+              #end
+            #end
+          #end
+
+          ## Continue building the update expression, adding attributes we're going to ADD **
+          #if( !${expAdd.isEmpty()} )
+            #set( $expression = "${expression} ADD" )
+            #foreach( $entry in $expAdd.entrySet() )
+              #set( $expression = "${expression} ${entry.key} ${entry.value}" )
+              #if ( $foreach.hasNext )
+                #set( $expression = "${expression}," )
+              #end
+            #end
+          #end
+
+          ## Continue building the update expression, adding attributes we're going to REMOVE **
+          #if( !${expRemove.isEmpty()} )
+            #set( $expression = "${expression} REMOVE" )
+
+            #foreach( $entry in $expRemove )
+              #set( $expression = "${expression} ${entry}" )
+              #if ( $foreach.hasNext )
+                #set( $expression = "${expression}," )
+              #end
+            #end
+          #end
+
+          ## Finally, write the update expression into the document, along with any expressionNames and expressionValues **
+          "update": {
+            "expression": "${expression}",
+            #if( !${expNames.isEmpty()} )
+              "expressionNames": $utils.toJson($expNames),
+            #end
+            #if( !${expValues.isEmpty()} )
+              "expressionValues": $utils.toJson($expValues),
+            #end
+          },
+
+          "condition": {
+            "expression": "attribute_exists(#policy_id)",
+            "expressionNames": {
+              "#policy_id": "policy_id",
+            },
+          }
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($context.result)
+
+  DeletePolicyResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt Api.ApiId
+      DataSourceName: !GetAtt PoliciesDataSource.Name
+      FieldName: deletePolicies
+      TypeName: Mutation
+      RequestMappingTemplate: !Sub |
+        {
+          "version": "2017-02-28",
+          "operation": "DeleteItem",
+          "key": {
+            "policy_id": $util.dynamodb.toDynamoDBJson($ctx.args.input.policy_id),
+          },
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($context.result)
+
+  GetPoliciesResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt Api.ApiId
+      DataSourceName: !GetAtt PoliciesDataSource.Name
+      FieldName: getPolicies
+      TypeName: Query
+      RequestMappingTemplate: !Sub |
+        {
+          "version": "2017-02-28",
+          "operation": "GetItem",
+          "key": {
+            "policy_id": $util.dynamodb.toDynamoDBJson($ctx.args.policy_id),
+          },
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($context.result)
+
+  ListPoliciesResolver:
+    Type: AWS::AppSync::Resolver
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt Api.ApiId
+      DataSourceName: !GetAtt PoliciesDataSource.Name
+      FieldName: listPolicies
+      TypeName: Query
+      RequestMappingTemplate: !Sub |
+        {
+          "version": "2017-02-28",
+          "operation": "Scan",
+          "filter": #if($context.args.filter) $util.transform.toDynamoDBFilterExpression($ctx.args.filter) #else null #end,
+          "limit": ${QueryLimit},
+          "nextToken": $util.toJson($util.defaultIfNullOrEmpty($ctx.args.nextToken, null)),
         }
       ResponseMappingTemplate: |
         $util.toJson($context.result)

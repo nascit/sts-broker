@@ -35,6 +35,10 @@ Parameters:
     Description: Name of the DynamoDB Table storing STS Broker policies
     Type: String
     Default: policies
+  TeamPreferencesTableName:
+    Description: Name of the DynamoDB Table storing the team info/preferences
+    Type: String
+    Default: team_preferences
 
 Resources:
   STSBrokerCore:
@@ -48,6 +52,7 @@ Resources:
         DefaultSecurityAdminEmailID: !Ref DefaultSecurityAdminEmailID
         CognitoUserPoolDomainName: !Ref CognitoUserPoolDomainName
         PoliciesTableName: !Ref PoliciesTableName
+        TeamPreferencesTableName : !Ref TeamPreferencesTableName
   AdminAPI:
     Type: AWS::Serverless::Application
     Properties:
@@ -56,6 +61,8 @@ Resources:
         Stage: !Ref Stage
         CognitoUserPoolID: !GetAtt STSBrokerCore.Outputs.CognitoUserPoolID
         PoliciesTableName: !Ref PoliciesTableName
+        TeamPreferencesTableName : !Ref TeamPreferencesTableName
+        ApproveRequestFunctionRoleARN: !GetAtt STSBrokerCore.Outputs.ApproveRequestFunctionRoleARN
   NotifySlack:
     Type: AWS::Serverless::Application
     Properties:
@@ -84,5 +91,5 @@ Outputs:
     Description: Cognito User Pool domain URL
     Value: !GetAtt STSBrokerCore.Outputs.CognitoUserPoolDomain
   ApproveRequestFunctionRoleARN:
-    Description: ARN of the approval function. Must be included on the Assumed Role trust relationship.
+    Description: IAM Role ARN of the approval function. Must be included on the Assumed Role trust relationship
     Value: !GetAtt STSBrokerCore.Outputs.ApproveRequestFunctionRoleARN
