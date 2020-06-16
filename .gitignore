@@ -50,3 +50,5 @@ permission_request.json
 hostedui.json
 stsbroker
 cmds
+
+setup/

@@ -61,7 +61,7 @@ Each different STS Broker policy will have a base role. The broker uses this bas
 
     'ApproveRequestFunctionRoleARN' is a output of the CloudFormation stack. It can be retrieved with the following command:
 
-        $ aws cloudformation describe-stacks --stack-name <CFN_STACK_NAME> --query "Stacks[0].Outputs[?OutputKey=='ApproveRequestFunctionRoleARN'].OutputValue" --output text --region AWS_REGION --profile <PROFILE>)
+        $ aws cloudformation describe-stacks --stack-name <CFN_STACK_NAME> --query "Stacks[0].Outputs[?OutputKey=='ApproveRequestFunctionRoleARN'].OutputValue" --output text --region AWS_REGION --profile <PROFILE>
     
 2. Build the base role trust relationship policy JSON document.
 
@@ -110,7 +110,7 @@ The next component required by the broker is a document detailing a policy which
                 {
                     "Effect": "Allow",
                     "Action": [
-                        "ssm:StartSession",
+                        "ssm:StartSession"
                     ],
                     "Resource": "*",
                     "Condition": {
@@ -122,7 +122,7 @@ The next component required by the broker is a document detailing a policy which
                 }
             ]
         }
-        
+
 2. Create your custom managed IAM policy:
 
         aws iam create-policy --policy-name <POLICY_NAME> --policy-document file://managedpolicy.json
@@ -177,10 +177,38 @@ The next component required by the broker is a document detailing a policy which
           }
         }
         
-4. Create the item with the following command:
+4. Create the DDB item with the following command:
 
         aws dynamodb put-item --table-name policies --item file://MyAppDev.json --region <AWS_REGION>
         
+
+### Create a team
+
+1. Save the following document with the name MyAppTeam.json:
+
+    {
+      "policies": {
+        "L": [
+          {
+            "M": {
+              "description": {
+                "S": "This policy will give access to MyApp development environment."
+              },
+              "id": {
+                "S": "MyAppDev"
+              }
+            }
+          }
+        ]
+      },
+      "team_id": {
+        "S": "MyApp"
+      }
+    }
+
+2. Create the DDB item with the following command:
+
+        aws dynamodb put-item --table-name team_preferences --item file://MyAppTeam.json --region <AWS_REGION>
 
 ### Make your first permission request
 

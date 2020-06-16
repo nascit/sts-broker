@@ -12,14 +12,26 @@ input CreatePoliciesInput {
 	user_tags: [String]
 }
 
+input CreateTeamPreferencesInput {
+	team_id: String!
+	policies: [AWSJSON]!
+}
+
 input DeletePoliciesInput {
 	policy_id: String!
+}
+
+input DeleteTeamPreferencesInput {
+	team_id: String!
 }
 
 type Mutation {
 	createPolicies(input: CreatePoliciesInput!): Policies
 	updatePolicies(input: UpdatePoliciesInput!): Policies
 	deletePolicies(input: DeletePoliciesInput!): Policies
+	createTeamPreferences(input: CreateTeamPreferencesInput!): TeamPreferences
+	updateTeamPreferences(input: UpdateTeamPreferencesInput!): TeamPreferences
+	deleteTeamPreferences(input: DeleteTeamPreferencesInput!): TeamPreferences
 }
 
 type Policies {
@@ -44,6 +56,8 @@ type PoliciesConnection {
 type Query {
 	getPolicies(policy_id: String!): Policies
 	listPolicies(filter: TablePoliciesFilterInput, limit: Int, nextToken: String): PoliciesConnection
+	getTeamPreferences(team_id: String!): TeamPreferences
+	listTeamPreferences(filter: TableTeamPreferencesFilterInput, limit: Int, nextToken: String): TeamPreferencesConnection
 }
 
 type Subscription {
@@ -71,6 +85,12 @@ type Subscription {
 		default_tags: [AWSJSON]
 	): Policies
 		@aws_subscribe(mutations: ["deletePolicies"])
+	onCreateTeamPreferences(team_id: String, policies: [AWSJSON]): TeamPreferences
+		@aws_subscribe(mutations: ["createTeamPreferences"])
+	onUpdateTeamPreferences(team_id: String, policies: [AWSJSON]): TeamPreferences
+		@aws_subscribe(mutations: ["updateTeamPreferences"])
+	onDeleteTeamPreferences(team_id: String, policies: [AWSJSON]): TeamPreferences
+		@aws_subscribe(mutations: ["deleteTeamPreferences"])
 }
 
 input TableBooleanFilterInput {
@@ -141,6 +161,20 @@ input TableStringFilterInput {
 	beginsWith: String
 }
 
+input TableTeamPreferencesFilterInput {
+	team_id: TableStringFilterInput
+}
+
+type TeamPreferences {
+	team_id: String!
+	policies: [AWSJSON]!
+}
+
+type TeamPreferencesConnection {
+	items: [TeamPreferences]
+	nextToken: String
+}
+
 input UpdatePoliciesInput {
 	policy_id: String!
 	account: String
@@ -153,4 +187,9 @@ input UpdatePoliciesInput {
 	risk: String
 	slack_webhook_url: String
 	user_tags: [String]
+}
+
+input UpdateTeamPreferencesInput {
+	team_id: String!
+	policies: [AWSJSON]
 }
